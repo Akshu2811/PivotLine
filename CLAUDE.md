@@ -50,3 +50,12 @@ roles they're considering. From that, PivotLine:
    (e.g. 1440x900) and phone width (e.g. 390x844), actually look at the
    screenshots, and fix anything that looks generic, cramped, misaligned, or
    broken — before telling the user the phase is done.
+5. **Reasoning effort**: `getStructuredCompletion` takes a `reasoningEffort`
+   param (`"minimal" | "low" | "medium" | "high"`), defaulting to `"low"`.
+   - Use `"low"` (the default — fine to omit) for **extraction** tasks: parsing
+     the user's career story into a profile, extracting skills from a pasted job
+     description, parsing application records.
+   - Pass `reasoningEffort: "medium"` explicitly for **planning and judgment**
+     tasks: building/re-planning the weekly learning plan, generating insights
+     (e.g. which roles get responses), and scoring mock interview answers
+     against the rubric.
