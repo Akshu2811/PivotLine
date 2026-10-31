@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
-import { Instrument_Serif, Inter_Tight, JetBrains_Mono } from "next/font/google";
+import {
+  Bricolage_Grotesque,
+  Instrument_Serif,
+  JetBrains_Mono,
+} from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/shell/AppShell";
 
@@ -7,11 +11,13 @@ const instrumentSerif = Instrument_Serif({
   variable: "--font-instrument-serif",
   subsets: ["latin"],
   weight: "400",
+  // Italic is load-bearing: one word in every screen's description is set in it.
+  style: ["normal", "italic"],
   display: "swap",
 });
 
-const interTight = Inter_Tight({
-  variable: "--font-inter-tight",
+const bricolage = Bricolage_Grotesque({
+  variable: "--font-bricolage",
   subsets: ["latin"],
   display: "swap",
 });
@@ -32,7 +38,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${instrumentSerif.variable} ${interTight.variable} ${jetbrainsMono.variable} h-full`}
+      className={`${instrumentSerif.variable} ${bricolage.variable} ${jetbrainsMono.variable} h-full`}
     >
       <body className="h-full">
         <AppShell>{children}</AppShell>

@@ -8,17 +8,18 @@
 
 @theme {
   /* Paper — surfaces */
-  --color-paper: #f4f1e9;
+  --color-paper: #f6f1e4;
   --color-paper-raised: #faf8f2;
-  --color-paper-sunken: #e9e4d7;
-  --color-paper-edge: #ded7c6;
-  --color-rule: #cfc7b2;
+  --color-paper-sunken: #e2dbc8;
+  --color-paper-edge: #c9bfa6;
+  --color-rule: #b3a888;
 
-  /* Ink — text */
-  --color-ink: #17150f;
-  --color-ink-soft: #4a443a;
-  --color-ink-muted: #7a7263;
-  --color-ink-faint: #a79e8c;
+  /* Ink — text. Deliberately heavier than a typical web ramp: this is printed
+     ink on paper, so even metadata holds its weight instead of greying out. */
+  --color-ink: #0d0b07;
+  --color-ink-soft: #312c22;
+  --color-ink-muted: #554d3e;
+  --color-ink-faint: #7d7461;
 
   /* Dark panels */
   --color-panel: #141210;
@@ -28,7 +29,7 @@
   /* Lifted from #8A6A24 — the original failed contrast on --color-panel for
      the 9–11px mono labels in the voice dock, and left the resting waveform
      ring effectively invisible. */
-  --color-amber-dim: #ab8534;
+  --color-amber-dim: #c49a3d;
 
   /* Transit lines */
   --color-pivot: #e2541c;
@@ -38,7 +39,7 @@
 
   /* Type */
   --font-display: var(--font-instrument-serif), ui-serif, Georgia, serif;
-  --font-sans: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
 
   /* Shape */
@@ -76,24 +77,82 @@ body {
   color: var(--color-ink);
 }
 
-/* Paper has a faint printed tooth so it never reads as flat #fff-ish gray.
-   Two hairline grids, extremely low contrast. No gradients. */
+/* Paper fibre. Desaturated fractal noise multiplied into the paper colour, so
+   it can only ever darken — the stock gets a tooth, never a grey cast. Applied
+   once at the shell root; every surface above it is either transparent or an
+   intentionally opaque card. */
 .paper-grain {
+  background-color: var(--color-paper);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)' opacity='0.22'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-blend-mode: multiply;
+}
+
+/* Printed tooth over the fibre: two hairline grids, very low contrast, so a
+   wide empty page still reads as stock rather than flat colour. */
+.paper-grid {
   background-image:
     repeating-linear-gradient(
       0deg,
-      rgba(23, 21, 15, 0.022) 0px,
-      rgba(23, 21, 15, 0.022) 1px,
+      rgba(13, 11, 7, 0.026) 0px,
+      rgba(13, 11, 7, 0.026) 1px,
       transparent 1px,
       transparent 32px
     ),
     repeating-linear-gradient(
       90deg,
-      rgba(23, 21, 15, 0.022) 0px,
-      rgba(23, 21, 15, 0.022) 1px,
+      rgba(13, 11, 7, 0.026) 0px,
+      rgba(13, 11, 7, 0.026) 1px,
       transparent 1px,
       transparent 32px
     );
+}
+
+/* The empty-state train: one dot creeping the length of the unbuilt track.
+   Driven by CSS rather than Framer because Framer will not interpolate a
+   percentage `left` — it snaps straight to 100% and parks there. */
+@keyframes train-creep {
+  from {
+    left: 0%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+.train-creep {
+  animation: train-creep 9s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The global reduce rule collapses durations, which would strand the train
+     at the far end of the track. Park it at the origin instead. */
+  .train-creep {
+    animation: none !important;
+    left: 0%;
+  }
+}
+
+/* One word of each screen's description, lifted into display italic. */
+.t-accent {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 1.22em;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--color-ink);
+}
+
+/* Huge outlined platform code sitting behind a screen title. Stroke only — a
+   filled version at this size would fight the headline. */
+.platform-ghost {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  line-height: 0.78;
+  letter-spacing: -0.04em;
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(13, 11, 7, 0.13);
+  user-select: none;
 }
 
 /* ── Type scale ─────────────────────────────────────────────────────── */
@@ -181,7 +240,7 @@ body {
 
 /* The one allowed form of lift: a hard-edged offset block, never a blur. */
 .card-offset {
-  box-shadow: 3px 3px 0 0 rgba(23, 21, 15, 0.08);
+  box-shadow: 4px 4px 0 0 rgba(13, 11, 7, 0.16);
 }
 
 /* Printed timetable rules between rows. */

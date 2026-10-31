@@ -62,7 +62,7 @@ export function PlaceholderScreen({
         <section className="card card-offset overflow-hidden">
           <div className="flex items-center justify-between gap-4 border-b border-paper-edge bg-paper-sunken px-6 py-4">
             <span className="t-label text-ink">{capturedLabel}</span>
-            <span className="t-mono text-[10px] text-ink-faint">
+            <span className="t-mono text-[10px] text-ink-muted">
               {String(captured.length).padStart(2, "0")} LOGGED · {station.code}
             </span>
           </div>

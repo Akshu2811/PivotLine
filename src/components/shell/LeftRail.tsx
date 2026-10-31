@@ -29,7 +29,7 @@ export function LeftRail() {
       <div className="flex h-16 items-end border-b border-paper-edge px-5 pb-3">
         <Link href="/boarding-pass" className="group block">
           <div className="t-label text-pivot">PivotLine</div>
-          <div className="t-mono mt-1.5 text-[10px] text-ink-faint">
+          <div className="t-mono mt-1.5 text-[10px] text-ink-muted">
             NETWORK MAP · 6 STOPS
           </div>
         </Link>
@@ -56,9 +56,9 @@ export function LeftRail() {
                   x2={TRACK_X}
                   y2={dotY(i + 1)}
                   stroke={LINE_COLOR[next.line]}
-                  strokeWidth={travelled ? 5 : 4}
+                  strokeWidth={travelled ? 6 : 4}
                   strokeLinecap="butt"
-                  opacity={travelled ? 1 : 0.55}
+                  opacity={travelled ? 1 : 0.7}
                 />
               );
             })}
@@ -111,7 +111,7 @@ export function LeftRail() {
                   >
                     {station.name}
                   </span>
-                  <span className="t-mono mt-1 block truncate text-[10px] text-ink-faint group-hover:text-ink-muted">
+                  <span className="t-mono mt-1 block truncate text-[10px] text-ink-muted group-hover:text-ink">
                     {station.code} · {LINE_SHORT[station.line]}
                   </span>
                 </span>
@@ -124,7 +124,7 @@ export function LeftRail() {
       {/* Legend: two columns so all four lines always fit above the fold, even
           on a short laptop window. */}
       <div className="shrink-0 border-t border-paper-edge px-5 py-4">
-        <div className="t-label text-ink-faint">Lines</div>
+        <div className="t-label text-ink-muted">Lines</div>
         <ul className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2.5">
           {(["pivot", "learn", "build", "talk"] as const).map((key) => (
             <li key={key} className="flex min-w-0 items-center gap-2">
@@ -162,11 +162,11 @@ export function StationStrip() {
   return (
     <nav
       aria-label="Stations"
-      className="lg:hidden border-b border-paper-edge bg-paper"
+      className="lg:hidden border-b border-paper-edge"
     >
       <div className="flex items-center justify-between px-5 pt-3">
         <span className="t-label text-pivot">PivotLine</span>
-        <span className="t-mono text-[10px] text-ink-faint">
+        <span className="t-mono text-[10px] text-ink-muted">
           STOP {active + 1}/{STATIONS.length}
         </span>
       </div>
@@ -189,7 +189,7 @@ export function StationStrip() {
                     className="absolute left-1/2 top-[5px] h-[4px] w-full"
                     style={{
                       background: LINE_COLOR[STATIONS[i + 1].line],
-                      opacity: i < active ? 1 : 0.3,
+                      opacity: i < active ? 1 : 0.45,
                     }}
                   />
                 )}
@@ -212,7 +212,7 @@ export function StationStrip() {
                 >
                   {station.name}
                 </span>
-                <span className="t-mono mt-1 text-[9px] text-ink-faint">
+                <span className="t-mono mt-1 text-[9px] text-ink-muted">
                   {station.code}
                 </span>
               </Link>

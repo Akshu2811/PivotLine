@@ -26,8 +26,8 @@ type JourneyState = {
 };
 
 const DEMO = {
-  fromRole: "Support Engineer",
-  toRole: "Solutions Architect",
+  fromRole: "L2 Application Support",
+  toRole: "AI Engineer",
   story: "",
   boarded: false,
 };

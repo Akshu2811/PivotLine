@@ -65,7 +65,7 @@ function StationClock() {
         </span>
       </div>
       <div className="hidden flex-col justify-center sm:flex">
-        <span className="t-label text-ink-faint">Station time</span>
+        <span className="t-label text-ink-muted">Station time</span>
         <span className="t-mono mt-1 text-[10px] text-ink-muted">
           LOCAL · LIVE
         </span>
@@ -110,13 +110,13 @@ export function TopStrip() {
   );
 
   return (
-    <header className="shrink-0 border-b border-paper-edge bg-paper px-5 py-3 lg:px-10">
+    <header className="shrink-0 border-b border-paper-edge px-5 py-3 lg:px-10">
       <div className="flex min-h-10 items-center justify-between gap-4">
         <StationClock />
 
         <div className="flex min-w-0 items-center gap-3 lg:gap-4">
           <div className="min-w-0 shrink-0 text-right">
-            <div className="t-label text-ink-faint">
+            <div className="t-label text-ink-muted">
               {boarded ? "Your route" : "Demo route"}
             </div>
             <div className="t-mono mt-1 text-[10px] text-ink-muted">

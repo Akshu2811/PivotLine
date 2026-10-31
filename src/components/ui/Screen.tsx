@@ -11,6 +11,27 @@ import {
 } from "@/lib/stations";
 
 /**
+ * Renders an intro string where exactly one word is wrapped in asterisks, and
+ * sets that word in display italic. Keeping the marker in the copy means each
+ * screen's emphasis lives next to the sentence it belongs to, not in markup.
+ */
+function Intro({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/\*([^*]+)\*/).map((part, i) =>
+        i % 2 === 1 ? (
+          <em key={i} className="t-accent">
+            {part}
+          </em>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
+  );
+}
+
+/**
  * Page frame. Content is a left-aligned printed column, never a centred hero.
  * Bottom padding clears the fixed voice dock on every screen.
  */
@@ -27,7 +48,7 @@ export function Screen({
 
   return (
     <div
-      className="paper-grain min-h-full px-5 pt-7 lg:px-10 lg:pt-10"
+      className="paper-grid min-h-full px-5 pt-7 lg:px-10 lg:pt-10"
       style={{ paddingBottom: "calc(var(--dock-h) + 40px)" }}
     >
       <div className="mx-auto max-w-[1100px]">
@@ -39,19 +60,31 @@ export function Screen({
             >
               {LINE_NAME[station.line]}
             </span>
-            <span className="t-mono text-[11px] text-ink-faint">
+            <span className="t-mono text-[11px] text-ink-muted">
               PLATFORM {station.code}
             </span>
           </div>
 
-          <h1 className="t-display mt-4 text-ink">{station.name}</h1>
+          {/* The platform code, printed huge and outlined behind the station
+              name the way it is stencilled on a real platform wall. */}
+          <div className="relative mt-7 lg:mt-10">
+            <span
+              aria-hidden="true"
+              className="platform-ghost pointer-events-none absolute top-1/2 left-[-6px] -translate-y-1/2 text-[92px] lg:left-[-10px] lg:text-[128px]"
+            >
+              {station.code}
+            </span>
+            <h1 className="t-display relative text-ink">{station.name}</h1>
+          </div>
 
-          <p className="t-body mt-4 max-w-[62ch] text-ink-soft">{intro}</p>
+          <p className="t-body mt-6 max-w-[62ch] text-pretty text-ink-soft">
+            <Intro text={intro} />
+          </p>
 
           {/* Printed rule under the header, tipped with this screen's line. */}
           <div className="mt-6 flex items-center lg:mt-7">
-            <span className="block h-[4px] w-14" style={{ background: color }} />
-            <span className="block h-px flex-1 bg-paper-edge" />
+            <span className="block h-[5px] w-16" style={{ background: color }} />
+            <span className="block h-[2px] flex-1 bg-rule" />
           </div>
         </header>
 
@@ -74,7 +107,7 @@ function NextStop({ station }: { station: Station }) {
       href={next.href}
       className="group mt-6 flex items-center gap-4 border-t border-paper-edge pt-5"
     >
-      <span className="t-label shrink-0 text-ink-faint">Next stop</span>
+      <span className="t-label shrink-0 text-ink-muted">Next stop</span>
       <span className="flex min-w-0 flex-1 items-center gap-3">
         <span className="block h-[3px] min-w-6 flex-1" style={{ background: color }} />
         <span
@@ -85,7 +118,7 @@ function NextStop({ station }: { station: Station }) {
       <span className="shrink-0 font-display text-[19px] leading-none text-ink transition-colors group-hover:text-[var(--color-pivot)]">
         {next.name}
       </span>
-      <span className="t-mono shrink-0 text-[10px] text-ink-faint">{next.code}</span>
+      <span className="t-mono shrink-0 text-[10px] text-ink-muted">{next.code}</span>
     </Link>
   );
 }
@@ -111,23 +144,45 @@ export function EmptyState({
   return (
     <section className="card card-offset relative overflow-hidden">
       {/* Unbuilt track: a dashed line with hollow stations, meaning "nothing
-          here yet" in the visual language of the app. */}
-      <div className="flex items-center gap-0 border-b border-paper-edge bg-paper-sunken px-6 py-5">
-        {[0, 1, 2, 3].map((i) => (
-          <span key={i} className="flex min-w-0 flex-1 items-center">
+          here yet" in the visual language of the app. A single train dot keeps
+          creeping along it, so the screen reads as waiting rather than dead. */}
+      <div className="flex items-center border-b border-paper-edge bg-paper-sunken px-6 py-5">
+        {/* The dots sit at 0% and 100% of this box, so the train's travel can
+            be expressed as a plain 0→100% sweep of the same box. */}
+        <div className="relative flex min-w-0 flex-1 items-center">
+          {[0, 1, 2, 3].map((i) => (
             <span
-              className="block h-[11px] w-[11px] shrink-0 rounded-full border-2 bg-paper-raised"
-              style={{ borderColor: color, opacity: 0.8 }}
-            />
-            {i < 3 && (
+              key={i}
+              className={
+                i < 3 ? "flex min-w-0 flex-1 items-center" : "flex shrink-0 items-center"
+              }
+            >
               <span
-                className="block h-0 min-w-0 flex-1 border-t-[3px] border-dashed"
-                style={{ borderColor: color, opacity: 0.6 }}
+                className="relative z-10 block h-[12px] w-[12px] shrink-0 rounded-full border-2 bg-paper-raised"
+                style={{ borderColor: color }}
               />
-            )}
-          </span>
-        ))}
-        <span className="t-mono ml-4 shrink-0 text-[10px] text-ink-faint">
+              {i < 3 && (
+                <span
+                  className="block h-0 min-w-0 flex-1 border-t-[3px] border-dashed"
+                  style={{ borderColor: color, opacity: 0.75 }}
+                />
+              )}
+            </span>
+          ))}
+
+          <span
+            aria-hidden="true"
+            className="train-creep pointer-events-none absolute top-1/2 z-20 block h-[9px] w-[9px] rounded-full"
+            style={{
+              background: color,
+              marginTop: -4.5,
+              marginLeft: -4.5,
+              boxShadow: "0 0 0 3px var(--color-paper-sunken)",
+            }}
+          />
+        </div>
+
+        <span className="t-mono ml-5 shrink-0 text-[10px] text-ink-muted">
           NO SERVICE
         </span>
       </div>
@@ -135,14 +190,14 @@ export function EmptyState({
       <div className="px-6 py-6 lg:px-8 lg:py-7">
         <h2 className="t-h2 text-ink">{heading}</h2>
 
-        <div className="t-label mt-6 text-ink-faint">Say something like</div>
+        <div className="t-label mt-6 text-ink-muted">Say something like</div>
         <ul className="mt-3 space-y-0 border-t border-paper-edge">
           {sayThis.map((line_, i) => (
             <li
               key={i}
               className="flex items-start gap-3 border-b border-paper-edge py-3"
             >
-              <span className="t-mono shrink-0 pt-[3px] text-[11px] text-ink-faint">
+              <span className="t-mono shrink-0 pt-[3px] text-[11px] text-ink-muted">
                 {String(i + 1).padStart(2, "0")}
               </span>
               <span
@@ -154,7 +209,7 @@ export function EmptyState({
           ))}
         </ul>
 
-        <p className="t-small mt-5 max-w-[62ch] text-ink-muted">
+        <p className="t-small mt-5 max-w-[62ch] text-pretty text-ink-muted">
           {notes ??
             "Dictate into the dock below, then press Send. Nothing leaves your browser until you do."}
         </p>
@@ -177,7 +232,7 @@ export function Stat({
 }) {
   return (
     <div className="border-t-2 pt-3" style={{ borderColor: line ? LINE_COLOR[line] : "var(--color-ink)" }}>
-      <div className="t-label text-ink-faint">{label}</div>
+      <div className="t-label text-ink-muted">{label}</div>
       <div className="mt-2 flex items-baseline gap-1.5">
         <span className="font-mono text-[28px] leading-none font-medium tracking-tight text-ink tabular-nums">
           {value}

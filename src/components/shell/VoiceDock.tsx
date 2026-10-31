@@ -108,7 +108,7 @@ export function VoiceDock() {
           <div className="hidden shrink-0 flex-col items-stretch justify-end gap-2 lg:flex">
             {sendButton}
             <span className="t-mono text-center text-[9px] text-amber-dim">
-              {hasHandler ? "⌘↵" : "NO HANDLER"}
+              {hasHandler ? "CTRL+ENTER" : "NO HANDLER"}
             </span>
           </div>
         </div>

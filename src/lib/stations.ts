@@ -32,7 +32,8 @@ export const STATIONS: Station[] = [
     name: "The Line",
     code: "LN2",
     line: "pivot",
-    dockHint: "Paste a job description, or say which skill you just picked up",
+    dockHint:
+      "Paste an AI engineer job description, or say which skill you just picked up",
   },
   {
     href: "/timetable",

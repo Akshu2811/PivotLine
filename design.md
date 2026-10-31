@@ -29,20 +29,38 @@ These are hard rules, not preferences. Breaking one is a bug.
 
 | Token | Hex | Use |
 | --- | --- | --- |
-| `--paper` | `#F4F1E9` | App background. Warm off-white, slightly yellow. |
+| `--paper` | `#F2EEE4` | App background. Warm off-white, slightly yellow. |
 | `--paper-raised` | `#FAF8F2` | Cards, panels sitting on paper. |
-| `--paper-sunken` | `#E9E4D7` | Wells, inactive track, input troughs. |
-| `--paper-edge` | `#DED7C6` | Hairline rules, card borders, table dividers. |
-| `--rule` | `#CFC7B2` | Timetable rule lines (the thin printed lines). |
+| `--paper-sunken` | `#E2DBC8` | Wells, inactive track, input troughs. |
+| `--paper-edge` | `#C9BFA6` | Hairline rules, card borders, table dividers. |
+| `--rule` | `#B3A888` | Timetable rule lines (the thin printed lines). |
 
 ### Ink (text)
 
+Deliberately heavier than a typical web ramp. This is **printed ink on paper**:
+even metadata holds its weight instead of greying out. `--ink-faint` is reserved
+for genuinely inert text — placeholders and disabled controls. Anything a user is
+meant to *read* uses `--ink-muted` or darker.
+
 | Token | Hex | Use |
 | --- | --- | --- |
-| `--ink` | `#17150F` | Headings, primary text. Near-black, warm. |
-| `--ink-soft` | `#4A443A` | Body text on paper. |
-| `--ink-muted` | `#7A7263` | Labels, captions, metadata. |
-| `--ink-faint` | `#A79E8C` | Placeholders, disabled, empty-state hints. |
+| `--ink` | `#0D0B07` | Headings, primary text. Near-black, warm. |
+| `--ink-soft` | `#312C22` | Body text on paper. |
+| `--ink-muted` | `#554D3E` | Labels, captions, metadata. |
+| `--ink-faint` | `#7D7461` | Placeholders and disabled controls only. |
+
+### Paper texture
+
+Two stacked layers, both so low-contrast they read as stock rather than pattern.
+Neither is a gradient.
+
+- **`.paper-grain`** — applied once, on the shell root. Desaturated SVG
+  `feTurbulence` fractal noise tiled at 180px and composited with
+  `background-blend-mode: multiply` over `--paper`, so it can only ever *darken*
+  the stock and never introduces a grey cast. Every surface above it is either
+  transparent (rails, top strip) or an intentionally opaque card.
+- **`.paper-grid`** — applied to the page content column. Two 32px hairline
+  grids at 3.5% ink, the printed tooth over the fibre.
 
 ### Dark panels
 
@@ -55,7 +73,7 @@ with **warm amber** text — split-flap / CRT, not neon.
 | `--panel-raised` | `#1F1C18` | Flap tiles, dock inner surface. |
 | `--panel-edge` | `#302B24` | Divisions inside dark panels. |
 | `--amber` | `#F0B429` | Primary text on dark panels. |
-| `--amber-dim` | `#8A6A24` | Secondary / unlit characters on dark panels. |
+| `--amber-dim` | `#C49A3D` | Secondary / unlit characters on dark panels. |
 
 ### Transit lines
 
@@ -80,8 +98,8 @@ Three families, loaded via `next/font/google`.
 
 | Token | Family | Role |
 | --- | --- | --- |
-| `--font-display` | **Instrument Serif** | Big headings. Station names. Route names. |
-| `--font-sans` | **Inter Tight** | Body, UI, labels, buttons. |
+| `--font-display` | **Instrument Serif** (roman + italic) | Big headings. Station names. Route names. The italic is load-bearing — see `.t-accent`. |
+| `--font-sans` | **Bricolage Grotesque** | Body, UI, labels, buttons. Chosen over a neutral grotesque for its slightly irregular, cut-by-hand feel — closer to type set in a print shop than to a UI font. |
 | `--font-mono` | **JetBrains Mono** | Numbers, clock times, platform codes, IDs, durations. |
 
 ### Scale
@@ -96,9 +114,30 @@ Three families, loaded via `next/font/google`.
 | `.t-label` | 11/1 | sans, 600, `0.14em` uppercase | Field labels, rail headers, badges. |
 | `.t-mono` | 13/1 | mono, `0.02em` | Times, codes, counts. |
 | `.t-mono-lg` | 26/1 | mono, 500, `-0.01em` | Station clock. `tnum` on. |
+| `.t-accent` | 1.22em | display **italic** | One word per screen description. |
+| `.platform-ghost` | 104px / 152px | mono, stroke only | Platform code behind a screen title. |
 
 All mono runs use `font-variant-numeric: tabular-nums` so digits don't jitter as
 the clock ticks.
+
+### Accent word
+
+**Every screen's description sets exactly one word in `.t-accent`** — Instrument
+Serif italic at 1.22em, in full `--ink`. It is the one place a serif appears in
+running text, and it gives each screen a word that carries the argument
+("artefacts", "evidence", "genuinely").
+
+The marker lives in the copy, not the markup: screen intros are plain strings
+with one word wrapped in asterisks (`…proves *artefacts* do`), and `Screen`'s
+`Intro` splits on that. Emphasis stays next to the sentence it belongs to.
+
+### Platform ghost
+
+Behind each screen title, the platform code (`LN2`, `TT3`) is printed in huge
+**outlined** mono — `color: transparent` plus a 1.5px `-webkit-text-stroke` of
+ink at 13% — the way it is stencilled on a real platform wall. Stroke only: a
+filled numeral at that size fights the headline. It is vertically centred on the
+title and bleeds slightly past the left gutter, and it is `aria-hidden`.
 
 ---
 
@@ -112,15 +151,17 @@ the clock ticks.
 - **Station dot:** 11px outer, 2px ring in the line color, paper-colored core.
   Visited stations fill solid. The train marker is a 13px solid pivot-orange dot
   with a 3px paper ring.
-- **Depth:** hairline rules first; if a surface must lift, use a 3px flat offset
-  block of `--ink` at 8% opacity (hard-edged, no blur).
+- **Depth:** hairline rules first; if a surface must lift, use a 4px flat offset
+  block of `--ink` at 16% opacity (hard-edged, no blur).
+- **Header rule:** every screen closes its header with a 5px stub in that
+  screen's line colour running into a 2px `--rule` hairline.
 
 ## Layout
 
 - **Left rail:** 232px fixed on ≥1024px. Becomes a horizontal scrolling station
   strip at the top on narrow screens.
 - **Top strip:** 64px. Station clock on the left, route on the right.
-- **Voice dock:** fixed to the bottom, 132px tall on laptop / 120px on phone. Page
+- **Voice dock:** fixed to the bottom, 150px tall on laptop / 146px on phone. Page
   content gets matching bottom padding so nothing is ever covered.
 - **Content column:** max 1100px, left-aligned, 40px gutters (20px on phone).
 - **Breakpoint:** one real break at 1024px. Everything below is the phone layout.
@@ -136,6 +177,12 @@ don't fade and float.
 - **Flap:** departure board rows flip on the X axis, 180ms, staggered 30ms.
 - **Waveform ring:** the voice dock ring pulses only while text is arriving; bars
   animate on a 900ms loop, 12 bars, staggered 60ms.
-- **Durations:** 160ms (state), 320ms (enter), 480ms (route draw). Nothing longer.
+- **Empty-state train:** the dashed "no service" track in every empty state
+  carries one 9px solid dot in the line colour, creeping from the first station
+  to the last on a 9s linear loop. The one deliberately slow motion in the
+  system — the screen should read as *waiting for service*, not as dead. Linear,
+  never eased: a train at constant speed, not a UI element animating in.
+- **Durations:** 160ms (state), 320ms (enter), 480ms (route draw). Nothing longer,
+  with the empty-state train as the single, explicit exception.
 - Everything respects `prefers-reduced-motion`: draws become instant, the ring
   stops animating and shows a static lit state.
