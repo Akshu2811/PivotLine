@@ -7,8 +7,12 @@ import { TranscriptBox } from "@/components/boarding-pass/TranscriptBox";
 import { EmptyState, Screen } from "@/components/ui/Screen";
 import { type CareerProfile, DEMO_PROFILE } from "@/lib/profile";
 import { STATIONS } from "@/lib/stations";
+import { useDepartures } from "@/lib/store/departures";
+import { useInterview } from "@/lib/store/interview";
 import { useJourney } from "@/lib/store/journey";
+import { usePlan } from "@/lib/store/plan";
 import { useProfile } from "@/lib/store/profile";
+import { useSkillMap } from "@/lib/store/skillMap";
 import { useVoiceDock, useVoiceHandler } from "@/lib/store/voiceDock";
 
 const STATION = STATIONS[0];
@@ -202,7 +206,17 @@ export default function BoardingPassPage() {
               setConfirmFresh(true);
               return;
             }
+            // Everything downstream was built against this profile and its
+            // target role — the line's skill map, the plan it drove, the
+            // projects accepted into it, the interview history scored
+            // against its stations, and the departures logged against it.
+            // A fresh pass makes all of that stale, so it goes too.
             resetProfile();
+            useSkillMap.getState().reset();
+            usePlan.getState().reset();
+            useInterview.getState().reset();
+            useDepartures.getState().reset();
+            useJourney.getState().reset();
             setConfirmFresh(false);
             setReRecording(false);
             setError(null);
