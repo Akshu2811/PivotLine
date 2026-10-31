@@ -70,7 +70,20 @@ export const usePlan = create<PlanState>()(
     (set, get) => ({
       ...INITIAL,
 
-      setPlan: (plan) => set({ plan, planned: true, pending: null, pendingText: "" }),
+      /**
+       * A new plan contains none of the tasks an accepted project put into the
+       * old one, so the acceptances are released with it — otherwise the depot
+       * would go on claiming those projects are scheduled when their work is
+       * gone. Check-in history survives: those weeks still happened.
+       */
+      setPlan: (plan) =>
+        set({
+          plan,
+          planned: true,
+          pending: null,
+          pendingText: "",
+          acceptedProjectIds: [],
+        }),
 
       setTaskStatus: (weekIndex, taskId, status) =>
         set((s) =>

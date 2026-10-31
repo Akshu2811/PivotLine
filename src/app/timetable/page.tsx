@@ -28,6 +28,7 @@ export default function TimetablePage() {
   const planned = usePlan((s) => s.planned);
   const pending = usePlan((s) => s.pending);
   const checkIns = usePlan((s) => s.checkIns);
+  const acceptedCount = usePlan((s) => s.acceptedProjectIds.length);
   const setPlan = usePlan((s) => s.setPlan);
   const cycleTask = usePlan((s) => s.cycleTask);
   const propose = usePlan((s) => s.propose);
@@ -39,6 +40,8 @@ export default function TimetablePage() {
 
   const [building, setBuilding] = useState(false);
   const [checking, setChecking] = useState(false);
+  /** Armed by a first click on Rebuild; a rebuild discards ticked-off work. */
+  const [confirmRebuild, setConfirmRebuild] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -62,6 +65,7 @@ export default function TimetablePage() {
       return;
     }
     setBuilding(true);
+    setConfirmRebuild(false);
     setError(null);
     setNotice(null);
     try {
@@ -145,15 +149,54 @@ export default function TimetablePage() {
         </header>
 
         <div className="flex flex-wrap items-center gap-3 px-5 py-4">
-          <button type="button" className="btn" onClick={buildPlan} disabled={building}>
-            {building ? "Building…" : isReal ? "Rebuild from the line" : "Build my plan"}
+          {/* A first plan just builds. Replacing one that has work ticked off
+              takes a second, deliberate click — same guard as Start fresh on
+              the boarding pass. */}
+          <button
+            type="button"
+            className="btn"
+            disabled={building}
+            onClick={() => {
+              if (isReal && !confirmRebuild) {
+                setConfirmRebuild(true);
+                return;
+              }
+              void buildPlan();
+            }}
+          >
+            {building
+              ? "Building…"
+              : !isReal
+                ? "Build my plan"
+                : confirmRebuild
+                  ? "Confirm — discard this plan"
+                  : "Rebuild from the line"}
           </button>
+
+          {confirmRebuild && !building && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setConfirmRebuild(false)}
+            >
+              Keep this plan
+            </button>
+          )}
+
           <span className="t-small w-full text-ink-muted sm:w-auto sm:min-w-0 sm:flex-1">
             {!hasSurvey
               ? "Survey job postings on The Line first — the plan is built from the gap stations."
-              : isReal
-                ? "Rebuilding starts a fresh plan from the current line and discards this one's progress."
-                : "Builds six to eight weeks from your line, inside the hours on your boarding pass."}
+              : confirmRebuild
+                ? `This replaces the plan entirely: ${progress.done} of ${progress.total} ticked-off ${
+                    progress.total === 1 ? "task" : "tasks"
+                  }${
+                    acceptedCount > 0
+                      ? ` and ${acceptedCount} scheduled ${acceptedCount === 1 ? "project" : "projects"}`
+                      : ""
+                  } will be lost. Check-ins stay in the log.`
+                : isReal
+                  ? "Rebuilding starts a fresh plan from the current line and discards this one's progress."
+                  : "Builds six to eight weeks from your line, inside the hours on your boarding pass."}
           </span>
         </div>
       </section>
