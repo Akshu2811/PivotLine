@@ -3,7 +3,7 @@ import { getStructuredCompletion } from "@/lib/ai/structuredCompletion";
 import type { CareerProfile } from "@/lib/profile";
 import {
   type Importance,
-  JD_EXTRACTION_SCHEMA,
+  JD_EXTRACTION_BATCH_SCHEMA,
   type JobExtraction,
   type MappedSkill,
   MAX_JDS,
@@ -22,8 +22,11 @@ import {
  *
  * Two stages, because they are two different jobs:
  *
- *   1. Extract each posting's required / nice-to-have skills, one call per
- *      posting, run concurrently. Pure extraction, so low reasoning effort.
+ *   1. Extract every posting's required / nice-to-have skills in a single
+ *      call. Pure extraction, so low reasoning effort. This used to be one
+ *      call per posting run concurrently; a single batched call is faster
+ *      in practice (no per-call round-trip or concurrent-request queueing)
+ *      and halves the number of model calls.
  *   2. Normalise the variations into canonical skills and rule each one gap /
  *      partial / have against the profile, with ordering and resources. That's
  *      judgement, so medium effort.
@@ -36,10 +39,13 @@ import {
  *
  * The response is a stream of newline-delimited JSON events, so the screen can
  * announce real progress — each posting as it is actually read, then the
- * mapping stage — rather than animating a guess at how long this takes.
+ * mapping stage — rather than animating a guess at how long this takes. A
+ * heartbeat event keeps the stream from going idle during the long mapping
+ * call, so nothing upstream mistakes the silence for a dead connection and
+ * cuts it off before "done" ever arrives.
  */
 
-/** Six postings is seven model calls; the platform default would cut it off. */
+/** Two model calls now instead of up to seven; the platform default would still cut it off. */
 export const maxDuration = 120;
 
 /** One line of NDJSON per event. The client renders these as announcements. */
@@ -47,11 +53,15 @@ export type SurveyEvent =
   | { type: "start"; total: number }
   | { type: "posting"; done: number; total: number; title: string; company: string | null }
   | { type: "mapping"; total: number }
+  | { type: "heartbeat" }
   | { type: "done"; map: SkillMap }
   | { type: "error"; error: string };
 
-const EXTRACT_SYSTEM = `You read one job posting and list the skills it asks for, for a career-pivot tool.
+const EXTRACT_SYSTEM = `You read several job postings and list the skills each one asks for, for a career-pivot tool.
 
+Return one entry per posting in "jobs", in the SAME ORDER the postings are given — the first entry is posting 1, and so on, even if a posting is thin or oddly formatted. Never skip, merge or reorder postings.
+
+For each posting:
 - "required": skills the posting treats as necessary — in the requirements section, or phrased as "you have", "must", "strong", "X+ years".
 - "niceToHave": skills phrased as bonus, plus, preferred, desirable, or "nice to have".
 - Each skill "name" is the concrete, searchable thing: a technology, tool, technique or discipline ("RAG pipelines", "Docker", "evaluation", "stakeholder communication"). Two to three words, no sentences. Use the posting's own term — a later step normalises variations across postings, so do not try to standardise here.
@@ -132,31 +142,36 @@ export async function POST(request: Request) {
       const send = (event: SurveyEvent) =>
         controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
 
+      // Keeps bytes flowing during the long single mapping call so an idle
+      // connection is never mistaken for a dead one and cut before "done".
+      const heartbeat = setInterval(() => send({ type: "heartbeat" }), 10_000);
+
       try {
         send({ type: "start", total: jds.length });
 
-        // Stage one: one posting per call, concurrently. Each announces itself
-        // as it lands, so the count on screen is postings actually read.
-        let done = 0;
-        const extractions = await Promise.all(
-          jds.map(async (jd, index) => {
-            const result = await getStructuredCompletion<JobExtraction>({
-              system: EXTRACT_SYSTEM,
-              prompt: `JOB POSTING ${index + 1}:\n"""\n${jd}\n"""`,
-              schema: JD_EXTRACTION_SCHEMA,
-              schemaName: "job_description_skills",
-            });
-            done += 1;
-            send({
-              type: "posting",
-              done,
-              total: jds.length,
-              title: result.data.title,
-              company: result.data.company,
-            });
-            return result.data;
-          }),
+        // Stage one: every posting in one call. Announce each as it's
+        // reported back, in order, so the board still fills one row at a
+        // time even though the read itself wasn't incremental.
+        const batch = await getStructuredCompletion<{ jobs: JobExtraction[] }>({
+          system: EXTRACT_SYSTEM,
+          prompt: jds.map((jd, index) => `JOB POSTING ${index + 1}:\n"""\n${jd}\n"""`).join("\n\n"),
+          schema: JD_EXTRACTION_BATCH_SCHEMA,
+          schemaName: "job_description_skills_batch",
+        });
+
+        const extractions: JobExtraction[] = jds.map(
+          (_, index) =>
+            batch.data.jobs[index] ?? { title: "Untitled posting", company: null, required: [], niceToHave: [] },
         );
+        extractions.forEach((extraction, index) => {
+          send({
+            type: "posting",
+            done: index + 1,
+            total: jds.length,
+            title: extraction.title,
+            company: extraction.company,
+          });
+        });
 
         // Stage two: normalise and judge, once, over everything.
         send({ type: "mapping", total: jds.length });
@@ -180,6 +195,7 @@ export async function POST(request: Request) {
           error: error instanceof Error ? error.message : String(error),
         });
       } finally {
+        clearInterval(heartbeat);
         controller.close();
       }
     },

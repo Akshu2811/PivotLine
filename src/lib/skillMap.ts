@@ -132,6 +132,24 @@ export const JD_EXTRACTION_SCHEMA: Record<string, unknown> = {
   additionalProperties: false,
 };
 
+/**
+ * Batch wrapper for stage one: every posting read in a single call instead
+ * of one call per posting. "jobs" must come back in the same order the
+ * postings were given, so the route can match each entry to its input index
+ * without the model having to echo one back.
+ */
+export const JD_EXTRACTION_BATCH_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    jobs: {
+      type: "array",
+      items: JD_EXTRACTION_SCHEMA,
+    },
+  },
+  required: ["jobs"],
+  additionalProperties: false,
+};
+
 /** Stage two: normalise across postings and rule on each skill. Judgement. */
 export const SKILL_COMPARISON_SCHEMA: Record<string, unknown> = {
   type: "object",
