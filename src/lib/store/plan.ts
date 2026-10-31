@@ -34,6 +34,8 @@ type PlanState = {
   propose: (proposal: CheckInProposal, text: string) => void;
   acceptCheckIn: () => void;
   rejectCheckIn: () => void;
+  /** Drops one extra task into the current week — the departure board's insight banner uses this. */
+  addAdHocTask: (text: string, hours: number) => void;
   reset: () => void;
 };
 
@@ -220,6 +222,25 @@ export const usePlan = create<PlanState>()(
         };
         set({ pending: null, pendingText: "", checkIns: [record, ...get().checkIns] });
       },
+
+      /** Lands in the earliest unfinished week, same fallback a project's tasks use. */
+      addAdHocTask: (text, hours) =>
+        set((s) => {
+          if (!s.plan) return s;
+          const weeks = s.plan.weeks.map((w) => ({ ...w, tasks: [...w.tasks] }));
+          const target =
+            weeks.find((w) => w.tasks.some((t) => t.status !== "done")) ??
+            weeks[weeks.length - 1];
+          if (!target) return s;
+          target.tasks.push({
+            id: nextTaskId(target, "insight"),
+            text,
+            hours,
+            status: "todo",
+            projectId: null,
+          });
+          return { plan: { ...s.plan, weeks } };
+        }),
 
       reset: () => set(INITIAL),
     }),
