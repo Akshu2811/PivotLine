@@ -4,13 +4,14 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { motion } from "framer-motion";
 import type { SurveyEvent } from "@/app/api/skill-map/route";
 import { JobDescriptions } from "@/components/line/JobDescriptions";
-import { MetroMap } from "@/components/line/MetroMap";
+import { MetroMap, type WeekSegment } from "@/components/line/MetroMap";
 import { StationPanel } from "@/components/line/StationPanel";
 import { type Announcement, SurveyBoard } from "@/components/line/SurveyBoard";
 import { Screen, Stat } from "@/components/ui/Screen";
 import { SAMPLE_JOBS } from "@/lib/sampleJobs";
 import { branchLine, DEMO_SKILL_MAP, mainLine, type SkillMap } from "@/lib/skillMap";
 import { STATIONS } from "@/lib/stations";
+import { usePlan } from "@/lib/store/plan";
 import { useProfile } from "@/lib/store/profile";
 import { useSkillMap } from "@/lib/store/skillMap";
 import { useVoiceHandler } from "@/lib/store/voiceDock";
@@ -38,6 +39,7 @@ export default function LinePage() {
   const setMap = useSkillMap((s) => s.setMap);
   const select = useSkillMap((s) => s.select);
   const promote = useSkillMap((s) => s.promote);
+  const plan = usePlan((s) => s.plan);
 
   const [surveying, setSurveying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +65,14 @@ export default function LinePage() {
 
   const ahead = mainLine(map);
   const cleared = branchLine(map);
+
+  // Once a plan exists, the track carries its week numbers — the same line,
+  // read as a schedule.
+  const weekSegments: WeekSegment[] | undefined = plan?.weeks.map((w) => ({
+    index: w.index,
+    theme: w.theme,
+    stationIds: w.stationIds,
+  }));
 
   const runSurvey = useCallback(async () => {
     const postings = useSkillMap.getState().jds;
@@ -314,6 +324,7 @@ export default function LinePage() {
             selectedId={selectedId}
             onSelect={(id) => select(id === selectedId ? null : id)}
             drawKey={drawKey}
+            weeks={weekSegments}
           />
         </motion.section>
 

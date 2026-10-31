@@ -12,14 +12,25 @@ const EASE = [0.16, 1, 0.3, 1] as const;
 /* Geometry, in real pixels — the SVG is rendered 1:1 against its measured
    container rather than scaled from a fixed viewBox, so label text is the same
    size on a phone as on a laptop instead of shrinking with the artwork. */
-const TRUNK_X = 40;
 const TOP_Y = 34;
 const STEP = 82;
 const BRANCH_DROP = 52;
 const BRANCH_START = 58;
-const LABEL_X = TRUNK_X + 26;
+
+/* The trunk shifts right when week segments are shown, to open a gutter for
+   the week brackets and their numbers. */
+const TRUNK_X_PLAIN = 40;
+const TRUNK_X_WEEKS = 78;
+const LABEL_OFFSET = 26;
 
 const DRAW_MS = 1150;
+
+/** A run of consecutive stations covered by one week of the plan. */
+export type WeekSegment = {
+  index: number;
+  theme: string;
+  stationIds: string[];
+};
 
 export function MetroMap({
   map,
@@ -27,11 +38,17 @@ export function MetroMap({
   onSelect,
   /** Bumped on a new survey so the line redraws. */
   drawKey,
+  /** Plan weeks, labelled against the track they cover. */
+  weeks,
+  /** Station ids to pick out; everything else dims. Drives project hover. */
+  highlightIds,
 }: {
   map: SkillMap;
   selectedId: string | null;
   onSelect: (id: string) => void;
   drawKey: number;
+  weeks?: WeekSegment[];
+  highlightIds?: string[];
 }) {
   const [width, setWidth] = useState(640);
   // Keyboard focus is drawn as part of the map; the browser's default outline
@@ -53,6 +70,11 @@ export function MetroMap({
 
   const main = mainLine(map);
   const branch = branchLine(map);
+
+  const showWeeks = (weeks?.length ?? 0) > 0;
+  const TRUNK_X = showWeeks ? TRUNK_X_WEEKS : TRUNK_X_PLAIN;
+  const LABEL_X = TRUNK_X + LABEL_OFFSET;
+  const highlight = highlightIds && highlightIds.length > 0 ? new Set(highlightIds) : null;
 
   const junctionY = TOP_Y + STEP * 0.72;
   const branchY = junctionY + BRANCH_DROP;
@@ -108,6 +130,57 @@ export function MetroMap({
         aria-label={`Skill gap line from ${map.jobs.length} job descriptions: ${main.length} stations ahead, ${branch.length} already cleared.`}
         style={{ display: "block", maxWidth: "100%" }}
       >
+        {/* Week brackets in the gutter: each spans the stations that week of
+            the plan covers, so the track reads as a schedule as well as a
+            route. A week whose stations aren't adjacent still brackets the
+            run it owns, which is the honest picture of the plan. */}
+        {showWeeks &&
+          weeks!.map((week) => {
+            const rows = main
+              .map((s, i) => (week.stationIds.includes(s.id) ? i : -1))
+              .filter((i) => i >= 0);
+            if (rows.length === 0) return null;
+            const top = stationY(Math.min(...rows)) - 20;
+            const bottom = stationY(Math.max(...rows)) + 20;
+            const mid = (top + bottom) / 2;
+            const x = TRUNK_X - 30;
+
+            return (
+              <motion.g
+                key={`week-${week.index}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4, delay: 0.5 + week.index * 0.05 }}
+              >
+                <title>{`Week ${week.index}: ${week.theme}`}</title>
+                <path
+                  d={`M ${x + 6} ${top} L ${x} ${top} L ${x} ${bottom} L ${x + 6} ${bottom}`}
+                  fill="none"
+                  stroke="var(--color-rule)"
+                  strokeWidth={1.5}
+                />
+                <text
+                  x={x - 6}
+                  y={mid - 3}
+                  textAnchor="end"
+                  fill="var(--color-ink-muted)"
+                  style={{ fontSize: 11, fontFamily: "var(--font-mono)", fontWeight: 500 }}
+                >
+                  WK
+                </text>
+                <text
+                  x={x - 6}
+                  y={mid + 11}
+                  textAnchor="end"
+                  fill="var(--color-ink)"
+                  style={{ fontSize: 13, fontFamily: "var(--font-mono)", fontWeight: 600 }}
+                >
+                  {String(week.index).padStart(2, "0")}
+                </text>
+              </motion.g>
+            );
+          })}
+
         {/* Trunk: the gap, drawn as the main line. */}
         <motion.path
           d={trunkPath}
@@ -141,6 +214,7 @@ export function MetroMap({
           label="You are here"
           sub={truncate(map.originRole, labelBudget)}
           delay={0}
+          labelX={LABEL_X}
         />
 
         {hasBranch && (
@@ -190,6 +264,7 @@ export function MetroMap({
             onFocusChange={setFocusedId}
             meter={showMeter ? { x: meterX, block: meterBlock, gap: meterGap } : null}
             rowWidth={width}
+            highlighted={highlight ? highlight.has(skill.id) : null}
             onSelect={onSelect}
             // Stations appear as the line reaches them.
             delay={0.12 + (stationY(i) / terminusY) * (DRAW_MS / 1000) * 0.9}
@@ -203,6 +278,7 @@ export function MetroMap({
           label="Destination"
           sub={truncate(map.targetRole, labelBudget)}
           delay={DRAW_MS / 1000}
+          labelX={LABEL_X}
           emphasis
         />
       </svg>
@@ -228,6 +304,7 @@ function MainStation({
   onFocusChange,
   meter,
   rowWidth,
+  highlighted,
   onSelect,
   delay,
 }: {
@@ -242,10 +319,13 @@ function MainStation({
   onFocusChange: (id: string | null) => void;
   meter: { x: number; block: number; gap: number } | null;
   rowWidth: number;
+  /** null when nothing is being highlighted; false means "dim, not yours". */
+  highlighted: boolean | null;
   onSelect: (id: string) => void;
   delay: number;
 }) {
   const r = radiusFor(skill, jdTotal);
+  const dim = highlighted === false;
 
   return (
     <motion.g
@@ -264,9 +344,23 @@ function MainStation({
       }}
       style={{ cursor: "pointer", outline: "none" }}
       initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
+      animate={{ opacity: dim ? 0.26 : 1 }}
       transition={{ duration: 0.3, ease: EASE, delay }}
     >
+      {highlighted === true && (
+        <motion.circle
+          cx={x}
+          cy={y}
+          r={r + 11}
+          fill="none"
+          stroke={PIVOT}
+          strokeWidth={2}
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.22, ease: EASE }}
+          style={{ transformOrigin: `${x}px ${y}px` }}
+        />
+      )}
       {/* The whole row is the hit area, dot through label to demand meter —
           the circles are small on purpose, and the gaps between the row's
           parts still read as part of the station. */}
@@ -438,6 +532,7 @@ function Terminus({
   label,
   sub,
   delay,
+  labelX,
   emphasis = false,
 }: {
   x: number;
@@ -445,6 +540,7 @@ function Terminus({
   label: string;
   sub: string;
   delay: number;
+  labelX: number;
   emphasis?: boolean;
 }) {
   const r = emphasis ? 11 : 9;
@@ -457,7 +553,7 @@ function Terminus({
       <circle cx={x} cy={y} r={r} fill={PIVOT} />
       <circle cx={x} cy={y} r={r - 4} fill="var(--color-paper-raised)" />
       <text
-        x={LABEL_X}
+        x={labelX}
         y={y - 3}
         fill="var(--color-ink-muted)"
         style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.14em" }}
@@ -465,7 +561,7 @@ function Terminus({
         {label.toUpperCase()}
       </text>
       <text
-        x={LABEL_X}
+        x={labelX}
         y={y + 15}
         fill="var(--color-ink)"
         style={{

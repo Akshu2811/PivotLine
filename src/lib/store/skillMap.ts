@@ -35,6 +35,8 @@ type SkillMapState = {
   select: (id: string | null) => void;
   /** "I've picked that up now" — promotes a station without a re-survey. */
   promote: (id: string) => void;
+  /** Set a station outright, used when a check-in proposal is accepted. */
+  setSkillStatus: (id: string, status: SkillStatus, reason?: string) => void;
   reset: () => void;
 };
 
@@ -121,6 +123,22 @@ export const useSkillMap = create<SkillMapState>()(
                               ? "You marked this station cleared."
                               : "You marked progress on this station.",
                         }
+                      : skill,
+                  ),
+                },
+              }
+            : s,
+        ),
+
+      setSkillStatus: (id, status, reason) =>
+        set((s) =>
+          s.map
+            ? {
+                map: {
+                  ...s.map,
+                  skills: s.map.skills.map((skill) =>
+                    skill.id === id
+                      ? { ...skill, status, reason: reason ?? skill.reason }
                       : skill,
                   ),
                 },
