@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { motion } from "framer-motion";
+import type { SurveyEvent } from "@/app/api/skill-map/route";
 import { JobDescriptions } from "@/components/line/JobDescriptions";
 import { MetroMap } from "@/components/line/MetroMap";
 import { StationPanel } from "@/components/line/StationPanel";
+import { type Announcement, SurveyBoard } from "@/components/line/SurveyBoard";
 import { Screen, Stat } from "@/components/ui/Screen";
 import { SAMPLE_JOBS } from "@/lib/sampleJobs";
 import { branchLine, DEMO_SKILL_MAP, mainLine, type SkillMap } from "@/lib/skillMap";
@@ -41,6 +43,12 @@ export default function LinePage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [drawKey, setDrawKey] = useState(0);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [progress, setProgress] = useState<{
+    done: number;
+    total: number;
+    phase: "extracting" | "mapping";
+  }>({ done: 0, total: 0, phase: "extracting" });
 
   const hydrated = useSyncExternalStore(
     (onChange) => useSkillMap.persist.onFinishHydration(onChange),
@@ -62,6 +70,12 @@ export default function LinePage() {
     setSurveying(true);
     setError(null);
     setNotice(null);
+    setAnnouncements([]);
+    setProgress({ done: 0, total: postings.length, phase: "extracting" });
+
+    const announce = (text: string, tag: string) =>
+      setAnnouncements((prev) => [{ id: prev.length, text, tag }, ...prev]);
+
     try {
       const response = await fetch("/api/skill-map", {
         method: "POST",
@@ -71,16 +85,64 @@ export default function LinePage() {
           profile: useProfile.getState().profile,
         }),
       });
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
+
+      // Input errors still come back as a plain JSON status; everything after
+      // the stream opens arrives as an event.
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
         throw new Error(data?.error || `Survey failed (${response.status}).`);
       }
-      setMap(data.map as SkillMap);
-      setDrawKey((k) => k + 1);
+      if (!response.body) throw new Error("The survey returned no data.");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finished = false;
+
+      // NDJSON: one event per line, and the last chunk may split a line.
+      for (;;) {
+        const { done: streamDone, value } = await reader.read();
+        if (streamDone) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const event = JSON.parse(line) as SurveyEvent;
+
+          if (event.type === "start") {
+            announce(
+              `Survey beginning — ${event.total} ${event.total === 1 ? "posting" : "postings"} on the platform`,
+              "LN2",
+            );
+          } else if (event.type === "posting") {
+            const who = event.company ? `${event.title}, ${event.company}` : event.title;
+            announce(
+              `Posting ${event.done} of ${event.total} read — ${who}`,
+              `${String(event.done).padStart(2, "0")}/${String(event.total).padStart(2, "0")}`,
+            );
+            setProgress({ done: event.done, total: event.total, phase: "extracting" });
+          } else if (event.type === "mapping") {
+            announce("Mapping the line — folding variations into stations", "MAP");
+            setProgress((p) => ({ ...p, phase: "mapping" }));
+          } else if (event.type === "error") {
+            throw new Error(event.error);
+          } else if (event.type === "done") {
+            setMap(event.map);
+            setDrawKey((k) => k + 1);
+            finished = true;
+          }
+        }
+      }
+
+      if (!finished) throw new Error("The survey ended before the line was drawn.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       setSurveying(false);
+      setAnnouncements([]);
     }
   }, [setMap]);
 
@@ -140,6 +202,24 @@ export default function LinePage() {
 
   useVoiceHandler(STATION.href, handleVoice);
 
+  /**
+   * Mapping is one call over everything and takes far longer than the reads,
+   * so the board would otherwise sit on one line for over a minute. These say
+   * what is still happening — they are descriptions of the running stage, not
+   * invented progress, and nothing here claims to know how far along it is.
+   */
+  useEffect(() => {
+    if (progress.phase !== "mapping") return;
+    const add = (text: string) =>
+      setAnnouncements((prev) => [{ id: prev.length, text, tag: "MAP" }, ...prev]);
+    const timers = [
+      setTimeout(() => add("Normalising skill names across every posting"), 14000),
+      setTimeout(() => add("Measuring each station against your boarding pass"), 38000),
+      setTimeout(() => add("Still working — this stage is the long one"), 66000),
+    ];
+    return () => timers.forEach(clearTimeout);
+  }, [progress.phase]);
+
   return (
     <Screen
       station={STATION}
@@ -156,21 +236,12 @@ export default function LinePage() {
       />
 
       {surveying && (
-        <div className="card mt-5 flex items-center gap-4 px-5 py-3.5">
-          <motion.span
-            aria-hidden="true"
-            className="block h-[11px] w-[11px] shrink-0 rounded-full"
-            style={{ background: "var(--color-pivot)" }}
-            animate={{ opacity: [1, 0.25, 1] }}
-            transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}
-          />
-          <span className="t-label text-ink">Surveying the line</span>
-          <span className="t-small min-w-0 flex-1 text-ink-muted">
-            Reading each posting, then folding the variations into one set of
-            stations and measuring them against your pass.
-          </span>
-          <span className="t-mono shrink-0 text-[10px] text-ink-muted">LN2</span>
-        </div>
+        <SurveyBoard
+          announcements={announcements}
+          done={progress.done}
+          total={progress.total}
+          phase={progress.phase}
+        />
       )}
 
       {error && (
