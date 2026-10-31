@@ -24,9 +24,16 @@ type DockState = {
   handler: VoiceHandler | null;
   /** Owner key, so a late unmount can't clear a newer screen's handler. */
   handlerKey: string | null;
+  /**
+   * A question the current screen is asking. When set it takes over the dock's
+   * label and placeholder — this is how the app asks for a missing fact
+   * (e.g. the target role) instead of guessing one.
+   */
+  prompt: string | null;
 
   setDraft: (text: string) => void;
   setReceiving: (receiving: boolean) => void;
+  setPrompt: (prompt: string | null) => void;
   registerHandler: (key: string, handler: VoiceHandler) => void;
   unregisterHandler: (key: string) => void;
   submit: () => Promise<void>;
@@ -38,9 +45,11 @@ export const useVoiceDock = create<DockState>((set, get) => ({
   submitting: false,
   handler: null,
   handlerKey: null,
+  prompt: null,
 
   setDraft: (draft) => set({ draft }),
   setReceiving: (receiving) => set({ receiving }),
+  setPrompt: (prompt) => set({ prompt }),
 
   registerHandler: (handlerKey, handler) => set({ handler, handlerKey }),
 

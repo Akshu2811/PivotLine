@@ -24,14 +24,16 @@ export function VoiceDock() {
   const receiving = useVoiceDock((s) => s.receiving);
   const submitting = useVoiceDock((s) => s.submitting);
   const hasHandler = useVoiceDock((s) => s.handler !== null);
+  const prompt = useVoiceDock((s) => s.prompt);
   const submit = useVoiceDock((s) => s.submit);
 
   useReceivingDetector(draft);
 
-  // Clear the draft when the user walks to another station, so dictation never
-  // lands on the wrong screen's handler.
+  // Clear the draft and any pending question when the user walks to another
+  // station, so dictation never lands on the wrong screen's handler.
   useEffect(() => {
     useVoiceDock.getState().setDraft("");
+    useVoiceDock.getState().setPrompt(null);
   }, [pathname]);
 
   const words = draft.trim() ? draft.trim().split(/\s+/).length : 0;
@@ -74,15 +76,19 @@ export function VoiceDock() {
             <WaveformRing active={receiving || submitting} />
             <span className="t-mono shrink-0 text-[9px] text-amber-dim">{status}</span>
             <span className="t-label ml-auto truncate text-amber lg:hidden">
-              {station.code} · Voice in
+              {prompt ? `${station.code} · Question` : `${station.code} · Voice in`}
             </span>
             <span className="lg:hidden">{sendButton}</span>
           </div>
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <div className="hidden items-baseline justify-between gap-3 pb-1.5 lg:flex">
-              <span className="t-label truncate text-amber">
-                {station.code} · Voice in
+              {/* A screen's pending question takes over this label, so the ask
+                  lands in the dock the user is already talking into. */}
+              {/* The question itself is the placeholder, so the label only has
+                  to say that one is pending. */}
+              <span className="t-label min-w-0 truncate text-amber">
+                {prompt ? `${station.code} · Answer below` : `${station.code} · Voice in`}
               </span>
               <span className="t-mono shrink-0 text-[10px] text-amber-dim">
                 {words} {words === 1 ? "WORD" : "WORDS"}
@@ -98,10 +104,11 @@ export function VoiceDock() {
                   void submit();
                 }
               }}
-              placeholder={station.dockHint}
+              placeholder={prompt ?? station.dockHint}
               spellCheck={false}
-              aria-label={`Dictate for ${station.name}`}
-              className="min-h-0 flex-1 resize-none rounded-sm border border-panel-edge bg-panel-raised px-3 py-2 text-[14px] leading-[1.45] text-[#F3EEE2] placeholder:text-amber-dim focus-visible:border-amber focus-visible:outline-none"
+              aria-label={prompt ?? `Dictate for ${station.name}`}
+              className="min-h-0 flex-1 resize-none rounded-sm border bg-panel-raised px-3 py-2 text-[14px] leading-[1.45] text-[#F3EEE2] placeholder:text-amber-dim focus-visible:border-amber focus-visible:outline-none"
+              style={{ borderColor: prompt ? "var(--color-amber)" : "var(--color-panel-edge)" }}
             />
           </div>
 

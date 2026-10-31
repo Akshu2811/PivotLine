@@ -33,7 +33,8 @@ function Intro({ text }: { text: string }) {
 
 /**
  * Page frame. Content is a left-aligned printed column, never a centred hero.
- * Bottom padding clears the fixed voice dock on every screen.
+ * The shell reserves the dock's height, so this only needs ordinary trailing
+ * space — the scroll viewport already ends above the dock.
  */
 export function Screen({
   station,
@@ -47,10 +48,7 @@ export function Screen({
   const color = LINE_COLOR[station.line];
 
   return (
-    <div
-      className="paper-grid min-h-full px-5 pt-7 lg:px-10 lg:pt-10"
-      style={{ paddingBottom: "calc(var(--dock-h) + 40px)" }}
-    >
+    <div className="paper-grid min-h-full px-5 pt-7 pb-10 lg:px-10 lg:pt-10 lg:pb-12">
       <div className="mx-auto max-w-[1100px]">
         <header className="pb-6 lg:pb-8">
           <div className="flex flex-wrap items-center gap-3">
