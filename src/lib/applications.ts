@@ -157,20 +157,21 @@ export const INSIGHTS_SCHEMA: Record<string, unknown> = {
 
 /* ── Demo board ───────────────────────────────────────────────────────── */
 
-function daysAgo(n: number): string {
-  return new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
-}
-
 /**
  * Seeded board, same companies as the sample skill map's postings, so the
  * sample pivot reads as one continuous story. Explorable with no key.
+ *
+ * Dates are fixed rather than computed from "today" — this module is
+ * imported by a server-rendered client component, and a `Date.now()` at
+ * module scope would get baked into the page at build time instead of
+ * staying fresh.
  */
 export const DEMO_APPLICATIONS: ApplicationRecord[] = [
   {
     id: 1,
     company: "Northwind Labs",
     role: "AI Engineer",
-    appliedAt: daysAgo(21),
+    appliedAt: "2026-10-10",
     status: "Interview",
     tags: ["rag", "startup", "3+ years"],
   },
@@ -178,7 +179,7 @@ export const DEMO_APPLICATIONS: ApplicationRecord[] = [
     id: 2,
     company: "Mesa Health",
     role: "AI Engineer (Platform)",
-    appliedAt: daysAgo(17),
+    appliedAt: "2026-10-14",
     status: "Replied",
     tags: ["mlops", "healthcare", "remote"],
   },
@@ -186,7 +187,7 @@ export const DEMO_APPLICATIONS: ApplicationRecord[] = [
     id: 3,
     company: "Corvid",
     role: "Machine Learning Engineer",
-    appliedAt: daysAgo(14),
+    appliedAt: "2026-10-17",
     status: "Rejected",
     tags: ["mlops", "5+ years"],
   },
@@ -194,7 +195,7 @@ export const DEMO_APPLICATIONS: ApplicationRecord[] = [
     id: 4,
     company: "Tessellate",
     role: "AI Engineer",
-    appliedAt: daysAgo(10),
+    appliedAt: "2026-10-21",
     status: "Applied",
     tags: ["rag", "remote", "startup"],
   },
@@ -202,7 +203,7 @@ export const DEMO_APPLICATIONS: ApplicationRecord[] = [
     id: 5,
     company: "Bright Ferry",
     role: "LLM Engineer",
-    appliedAt: daysAgo(6),
+    appliedAt: "2026-10-25",
     status: "Replied",
     tags: ["rag", "startup"],
   },
@@ -210,7 +211,7 @@ export const DEMO_APPLICATIONS: ApplicationRecord[] = [
     id: 6,
     company: "Halden & Co",
     role: "AI Engineer, Product",
-    appliedAt: daysAgo(2),
+    appliedAt: "2026-10-29",
     status: "Applied",
     tags: ["remote", "3+ years"],
   },

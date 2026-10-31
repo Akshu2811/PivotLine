@@ -1,10 +1,9 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
-import { type ApplicationRecord, daysSince, STATUS_COLOR } from "@/lib/applications";
+import { AnimatePresence } from "framer-motion";
+import type { ApplicationRecord } from "@/lib/applications";
+import { DepartureRow } from "./DepartureRow";
 import { SplitFlapRow } from "./SplitFlapRow";
-
-const EASE = [0.16, 1, 0.3, 1] as const;
 
 const COLS = {
   company: 13,
@@ -52,30 +51,7 @@ export function DepartureBoard({ applications }: { applications: ApplicationReco
 
           <AnimatePresence initial={false}>
             {rows.map((app) => (
-              <motion.div
-                key={app.id}
-                layout
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.3, ease: EASE }}
-                className="flex items-center gap-[2px]"
-              >
-                <SplitFlapRow value={app.company} length={COLS.company} size={SIZES.company} />
-                <SplitFlapRow value={app.role} length={COLS.role} size={SIZES.role} />
-                <SplitFlapRow
-                  value={app.status}
-                  length={COLS.status}
-                  defaultColor={STATUS_COLOR[app.status]}
-                  size={SIZES.status}
-                />
-                <SplitFlapRow
-                  value={`${daysSince(app.appliedAt)}D`}
-                  length={COLS.days}
-                  align="right"
-                  size={SIZES.days}
-                />
-              </motion.div>
+              <DepartureRow key={app.id} app={app} cols={COLS} sizes={SIZES} />
             ))}
           </AnimatePresence>
         </div>
