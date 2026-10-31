@@ -211,7 +211,7 @@ export default function BoardingPassPage() {
           {confirmFresh ? "Confirm — clear the pass" : "Start fresh"}
         </button>
 
-        <p className="t-small min-w-0 flex-1 text-ink-muted">
+        <p className="t-small w-full text-ink-muted sm:w-auto sm:min-w-0 sm:flex-1">
           {reRecording
             ? "Listening for additions. Dictate the correction into the dock — it merges into this pass."
             : issued
@@ -306,7 +306,7 @@ function ResumePaste({
             >
               {busy ? "Reading…" : "Add to pass"}
             </button>
-            <span className="t-small text-ink-muted">
+            <span className="t-small w-full text-ink-muted sm:w-auto sm:min-w-0 sm:flex-1">
               Merged into your pass alongside anything you said out loud.
             </span>
           </div>

@@ -1,20 +1,263 @@
 "use client";
 
-import { PlaceholderScreen } from "@/components/ui/PlaceholderScreen";
+import { useCallback, useState, useSyncExternalStore } from "react";
+import { motion } from "framer-motion";
+import { JobDescriptions } from "@/components/line/JobDescriptions";
+import { MetroMap } from "@/components/line/MetroMap";
+import { StationPanel } from "@/components/line/StationPanel";
+import { Screen, Stat } from "@/components/ui/Screen";
+import { SAMPLE_JOBS } from "@/lib/sampleJobs";
+import { branchLine, DEMO_SKILL_MAP, mainLine, type SkillMap } from "@/lib/skillMap";
 import { STATIONS } from "@/lib/stations";
+import { useProfile } from "@/lib/store/profile";
+import { useSkillMap } from "@/lib/store/skillMap";
+import { useVoiceHandler } from "@/lib/store/voiceDock";
 
+const STATION = STATIONS[1];
+const EASE = [0.16, 1, 0.3, 1] as const;
+
+/**
+ * The Line (LN2) — the skill-gap map. Postings in, metro line out: gaps and
+ * partials are stations on the main line in dependency-then-demand order,
+ * skills already held branch off in grey, and station size carries how many
+ * postings asked for it.
+ *
+ * With nothing surveyed the screen shows a labelled sample map, so the station
+ * is explorable with no key and no postings.
+ */
 export default function LinePage() {
+  const jds = useSkillMap((s) => s.jds);
+  const storedMap = useSkillMap((s) => s.map);
+  const surveyed = useSkillMap((s) => s.surveyed);
+  const mapFromSamples = useSkillMap((s) => s.mapFromSamples);
+  const selectedId = useSkillMap((s) => s.selectedId);
+  const addJd = useSkillMap((s) => s.addJd);
+  const removeJd = useSkillMap((s) => s.removeJd);
+  const setMap = useSkillMap((s) => s.setMap);
+  const select = useSkillMap((s) => s.select);
+  const promote = useSkillMap((s) => s.promote);
+
+  const [surveying, setSurveying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [drawKey, setDrawKey] = useState(0);
+
+  const hydrated = useSyncExternalStore(
+    (onChange) => useSkillMap.persist.onFinishHydration(onChange),
+    () => useSkillMap.persist.hasHydrated(),
+    () => false,
+  );
+
+  const isReal = hydrated && surveyed && storedMap !== null;
+  const fromSamples = isReal && mapFromSamples;
+  const map: SkillMap = isReal ? storedMap : DEMO_SKILL_MAP;
+  const selected = map.skills.find((s) => s.id === selectedId) ?? null;
+
+  const ahead = mainLine(map);
+  const cleared = branchLine(map);
+
+  const runSurvey = useCallback(async () => {
+    const postings = useSkillMap.getState().jds;
+    if (postings.length === 0) return;
+    setSurveying(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch("/api/skill-map", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobDescriptions: postings.map((jd) => jd.text),
+          profile: useProfile.getState().profile,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data?.error || `Survey failed (${response.status}).`);
+      }
+      setMap(data.map as SkillMap);
+      setDrawKey((k) => k + 1);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setSurveying(false);
+    }
+  }, [setMap]);
+
+  const loadSamples = useCallback(() => {
+    SAMPLE_JOBS.forEach((jd) => addJd(jd, true));
+    setNotice(
+      "Six sample postings loaded — these are invented, not scraped. Survey them to see the line build, then clear them and paste real ones.",
+    );
+  }, [addJd]);
+
+  const clearSamples = useCallback(() => {
+    useSkillMap
+      .getState()
+      .jds.filter((jd) => jd.sample)
+      .forEach((jd) => removeJd(jd.id));
+    setNotice(null);
+  }, [removeJd]);
+
+  /**
+   * Dock input does one of two things. A long paste is another posting. A short
+   * utterance is a progress report — "I write Python properly now" — which
+   * moves the matching station along without spending a survey on it.
+   */
+  const handleVoice = useCallback(
+    (text: string) => {
+      setError(null);
+      if (text.length > 220) {
+        addJd(text);
+        setNotice("Posting added. Survey when you've got them all in.");
+        return;
+      }
+
+      const current = useSkillMap.getState().map ?? DEMO_SKILL_MAP;
+      const spoken = text.toLowerCase();
+      const hit = current.skills
+        .filter((skill) => spoken.includes(skill.name.toLowerCase()))
+        .sort((a, b) => b.name.length - a.name.length)[0];
+
+      if (!hit) {
+        setNotice(
+          "That's too short for a posting, and it doesn't name a station on the line. Try naming the skill, or paste the full posting.",
+        );
+        return;
+      }
+      if (hit.status === "have") {
+        setNotice(`${hit.name} is already cleared — it's on the grey branch.`);
+        return;
+      }
+      promote(hit.id);
+      select(hit.id);
+      setNotice(
+        `${hit.name} moved ${hit.status === "gap" ? "to partial" : "to cleared"}. Re-survey when you want the postings re-read.`,
+      );
+    },
+    [addJd, promote, select],
+  );
+
+  useVoiceHandler(STATION.href, handleVoice);
+
   return (
-    <PlaceholderScreen
-      station={STATIONS[1]}
-      intro="The gap between where you are and where you're going, drawn as a line. Each station is a skill or milestone the target role expects; your train sits at the last one you've *genuinely* cleared. Paste a real job description and the line redraws around it."
-      emptyHeading="The line hasn't been surveyed yet."
-      capturedLabel="Fed into the survey"
-      sayThis={[
-        "Here's the AI engineer job description I'm aiming at — paste or dictate the whole posting.",
-        "I write Python properly now, not just scripts — mark that station as cleared.",
-        "Every posting wants RAG and evals — add both to the line as stations.",
-      ]}
-    />
+    <Screen
+      station={STATION}
+      intro="The gap between where you are and where you're going, drawn as a line. Each station is a skill the postings actually ask for; the ones you've *genuinely* cleared branch off in grey. Paste five to eight real postings and the line redraws around them."
+    >
+      <JobDescriptions
+        jds={jds}
+        onAdd={addJd}
+        onRemove={removeJd}
+        onSurvey={runSurvey}
+        onLoadSamples={loadSamples}
+        onClearSamples={clearSamples}
+        busy={surveying}
+      />
+
+      {surveying && (
+        <div className="card mt-5 flex items-center gap-4 px-5 py-3.5">
+          <motion.span
+            aria-hidden="true"
+            className="block h-[11px] w-[11px] shrink-0 rounded-full"
+            style={{ background: "var(--color-pivot)" }}
+            animate={{ opacity: [1, 0.25, 1] }}
+            transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <span className="t-label text-ink">Surveying the line</span>
+          <span className="t-small min-w-0 flex-1 text-ink-muted">
+            Reading each posting, then folding the variations into one set of
+            stations and measuring them against your pass.
+          </span>
+          <span className="t-mono shrink-0 text-[10px] text-ink-muted">LN2</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="card mt-5 border-l-[4px] border-l-pivot px-5 py-4">
+          <div className="t-label text-ink">Survey failed</div>
+          <p className="t-small mt-2 max-w-[70ch] text-pretty text-ink-soft">{error}</p>
+          <p className="t-small mt-2 text-ink-muted">
+            The sample line below still works — the whole station is explorable
+            without a key.
+          </p>
+        </div>
+      )}
+
+      {notice && !error && (
+        <div className="card mt-5 px-5 py-3.5">
+          <p className="t-small text-pretty text-ink-soft">{notice}</p>
+        </div>
+      )}
+
+      {/* Survey summary. A line built from the built-in postings says so —
+          the demand counts are real arithmetic over invented postings. */}
+      <div className="mt-7 flex flex-wrap items-center gap-3">
+        <span className="t-label text-ink-muted">
+          {!isReal ? "Sample line" : fromSamples ? "Line from sample postings" : "Your line"}
+        </span>
+        {(!isReal || fromSamples) && (
+          <span
+            className="badge"
+            style={{ background: "var(--color-pivot)", color: "#FAF8F2" }}
+          >
+            Sample data
+          </span>
+        )}
+        <span className="mb-[1px] block h-[2px] flex-1 bg-rule" />
+        <span className="t-mono text-[10px] text-ink-muted">
+          {map.jdTotal} POSTINGS SURVEYED
+        </span>
+      </div>
+
+      {(!isReal || fromSamples) && (
+        <p className="t-small mt-3 max-w-[70ch] text-pretty text-ink-muted">
+          {isReal
+            ? "Built from the six built-in sample postings, which are invented for the demo. The counts below are real arithmetic over those — paste your own postings for a line that means something."
+            : "This is a worked example for the demo pivot, not your data. Paste five to eight real postings above and survey them to replace it."}
+        </p>
+      )}
+
+      <div className="mt-5 grid gap-5 sm:grid-cols-3">
+        <Stat label="Stations ahead" value={String(ahead.length)} unit="to clear" line="pivot" />
+        <Stat label="Already cleared" value={String(cleared.length)} unit="on the branch" />
+        <Stat
+          label="Most demanded"
+          value={`${map.skills[0]?.jdCount ?? 0}/${map.jdTotal}`}
+          unit={map.skills[0]?.name ?? "—"}
+        />
+      </div>
+
+      <p className="t-body mt-5 max-w-[70ch] text-pretty text-ink-soft">{map.summary}</p>
+
+      {/* The map, with its panel alongside on laptop and beneath on phone. */}
+      <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_368px]">
+        <motion.section
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.34, ease: EASE }}
+          className="card card-offset min-w-0 px-4 py-6 lg:px-6 lg:py-8"
+        >
+          <MetroMap
+            map={map}
+            selectedId={selectedId}
+            onSelect={(id) => select(id === selectedId ? null : id)}
+            drawKey={drawKey}
+          />
+        </motion.section>
+
+        <div className="min-w-0 lg:sticky lg:top-4">
+          <StationPanel
+            skill={selected}
+            jdTotal={map.jdTotal}
+            onClose={() => select(null)}
+            onPromote={(id) => {
+              promote(id);
+              setNotice(null);
+            }}
+          />
+        </div>
+      </div>
+    </Screen>
   );
 }
