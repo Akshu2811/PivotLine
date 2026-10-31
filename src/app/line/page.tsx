@@ -9,8 +9,10 @@ import { StationPanel } from "@/components/line/StationPanel";
 import { type Announcement, SurveyBoard } from "@/components/line/SurveyBoard";
 import { Screen, Stat } from "@/components/ui/Screen";
 import { SAMPLE_JOBS } from "@/lib/sampleJobs";
+import { lowScoreStationIds } from "@/lib/interview";
 import { branchLine, DEMO_SKILL_MAP, mainLine, type SkillMap } from "@/lib/skillMap";
 import { STATIONS } from "@/lib/stations";
+import { useInterview } from "@/lib/store/interview";
 import { usePlan } from "@/lib/store/plan";
 import { useProfile } from "@/lib/store/profile";
 import { useSkillMap } from "@/lib/store/skillMap";
@@ -40,6 +42,8 @@ export default function LinePage() {
   const select = useSkillMap((s) => s.select);
   const promote = useSkillMap((s) => s.promote);
   const plan = usePlan((s) => s.plan);
+  const interviewAnswers = useInterview((s) => s.answers);
+  const warningIds = lowScoreStationIds(interviewAnswers);
 
   const [surveying, setSurveying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -325,6 +329,7 @@ export default function LinePage() {
             onSelect={(id) => select(id === selectedId ? null : id)}
             drawKey={drawKey}
             weeks={weekSegments}
+            warningIds={warningIds}
           />
         </motion.section>
 

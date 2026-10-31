@@ -6,6 +6,7 @@ import { branchLine, mainLine, type MappedSkill, type SkillMap } from "@/lib/ski
 import { LINE_COLOR } from "@/lib/stations";
 
 const PIVOT = LINE_COLOR.pivot;
+const MUSTARD = LINE_COLOR.talk;
 const GREY = "var(--color-rule)";
 const EASE = [0.16, 1, 0.3, 1] as const;
 
@@ -42,6 +43,8 @@ export function MetroMap({
   weeks,
   /** Station ids to pick out; everything else dims. Drives project hover. */
   highlightIds,
+  /** Station ids that have scored 2 or lower twice in the interview booth. */
+  warningIds,
 }: {
   map: SkillMap;
   selectedId: string | null;
@@ -49,6 +52,7 @@ export function MetroMap({
   drawKey: number;
   weeks?: WeekSegment[];
   highlightIds?: string[];
+  warningIds?: string[];
 }) {
   const [width, setWidth] = useState(640);
   // Keyboard focus is drawn as part of the map; the browser's default outline
@@ -75,6 +79,7 @@ export function MetroMap({
   const TRUNK_X = showWeeks ? TRUNK_X_WEEKS : TRUNK_X_PLAIN;
   const LABEL_X = TRUNK_X + LABEL_OFFSET;
   const highlight = highlightIds && highlightIds.length > 0 ? new Set(highlightIds) : null;
+  const warning = warningIds && warningIds.length > 0 ? new Set(warningIds) : null;
 
   const junctionY = TOP_Y + STEP * 0.72;
   const branchY = junctionY + BRANCH_DROP;
@@ -265,6 +270,7 @@ export function MetroMap({
             meter={showMeter ? { x: meterX, block: meterBlock, gap: meterGap } : null}
             rowWidth={width}
             highlighted={highlight ? highlight.has(skill.id) : null}
+            warned={warning ? warning.has(skill.id) : false}
             onSelect={onSelect}
             // Stations appear as the line reaches them.
             delay={0.12 + (stationY(i) / terminusY) * (DRAW_MS / 1000) * 0.9}
@@ -305,6 +311,7 @@ function MainStation({
   meter,
   rowWidth,
   highlighted,
+  warned,
   onSelect,
   delay,
 }: {
@@ -321,6 +328,8 @@ function MainStation({
   rowWidth: number;
   /** null when nothing is being highlighted; false means "dim, not yours". */
   highlighted: boolean | null;
+  /** Two or more interview answers on this station scored 2 or lower. */
+  warned: boolean;
   onSelect: (id: string) => void;
   delay: number;
 }) {
@@ -331,7 +340,7 @@ function MainStation({
     <motion.g
       role="button"
       tabIndex={0}
-      aria-label={`${skill.name}, ${skill.status === "gap" ? "gap" : "partial"}, asked for by ${skill.jdCount} of ${jdTotal} job descriptions`}
+      aria-label={`${skill.name}, ${skill.status === "gap" ? "gap" : "partial"}, asked for by ${skill.jdCount} of ${jdTotal} job descriptions${warned ? ", flagged from weak interview answers" : ""}`}
       aria-pressed={selected}
       onClick={() => onSelect(skill.id)}
       onFocus={() => onFocusChange(skill.id)}
@@ -360,6 +369,25 @@ function MainStation({
           transition={{ duration: 0.22, ease: EASE }}
           style={{ transformOrigin: `${x}px ${y}px` }}
         />
+      )}
+
+      {/* Mustard warning ring: this station has twice scored 2 or lower in the
+          interview booth, so it's weaker than the map alone would show. */}
+      {warned && (
+        <motion.circle
+          cx={x}
+          cy={y}
+          r={r + 5}
+          fill="none"
+          stroke={MUSTARD}
+          strokeWidth={2.5}
+          strokeDasharray="4 3"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3, ease: EASE, delay }}
+        >
+          <title>Scored 2 or lower twice in the Interview Booth</title>
+        </motion.circle>
       )}
       {/* The whole row is the hit area, dot through label to demand meter —
           the circles are small on purpose, and the gaps between the row's
