@@ -15,6 +15,19 @@ export type Skill = {
   evidence: string;
 };
 
+/**
+ * One term the extractor decided was a mistranscription and rewrote. Dictation
+ * mangles tech terms and company names constantly, so the fix is shown on the
+ * ticket rather than applied silently — the user can see what was changed and
+ * click the field to put it back.
+ */
+export type TranscriptionFix = {
+  /** Exactly what the transcript said. */
+  heardAs: string;
+  /** What it was written as on the pass. */
+  corrected: string;
+};
+
 export type NotableProject = {
   name: string;
   /** One or two sentences, in the user's own terms. */
@@ -45,6 +58,8 @@ export type CareerProfile = {
   skills: Skill[];
   notableProjects: NotableProject[];
   constraints: Constraints;
+  /** Mistranscribed terms that were rewritten, surfaced on the ticket. */
+  transcriptionFixes: TranscriptionFix[];
   /**
    * Set only when something required is missing — above all the target role.
    * The screen asks it in the dock instead of guessing a destination.
@@ -98,6 +113,18 @@ export const PROFILE_SCHEMA: Record<string, unknown> = {
       required: ["workMode", "hoursPerWeek", "timeline", "other"],
       additionalProperties: false,
     },
+    transcriptionFixes: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          heardAs: { type: "string" },
+          corrected: { type: "string" },
+        },
+        required: ["heardAs", "corrected"],
+        additionalProperties: false,
+      },
+    },
     followUpQuestion: { type: ["string", "null"] },
   },
   required: [
@@ -109,6 +136,7 @@ export const PROFILE_SCHEMA: Record<string, unknown> = {
     "skills",
     "notableProjects",
     "constraints",
+    "transcriptionFixes",
     "followUpQuestion",
   ],
   additionalProperties: false,
@@ -124,6 +152,7 @@ export const EMPTY_PROFILE: CareerProfile = {
   skills: [],
   notableProjects: [],
   constraints: { workMode: null, hoursPerWeek: null, timeline: null, other: [] },
+  transcriptionFixes: [],
   followUpQuestion: null,
 };
 
@@ -184,8 +213,35 @@ export const DEMO_PROFILE: CareerProfile = {
     timeline: "Interview-ready by March",
     other: ["Evenings only — no weekend study"],
   },
+  transcriptionFixes: [
+    { heardAs: "rag pipeline", corrected: "RAG pipelines" },
+    { heardAs: "a I engineer", corrected: "AI Engineer" },
+  ],
   followUpQuestion: null,
 };
+
+/**
+ * The fix that produced this printed value, if any. Matched on the corrected
+ * term appearing in the value, so one fix annotates wherever that term was
+ * written — the skill stub, the route, a project title.
+ */
+export function fixFor(
+  fixes: TranscriptionFix[],
+  value: string | null,
+): TranscriptionFix | null {
+  if (!value) return null;
+  const haystack = value.toLowerCase();
+  // Longest match wins, so a short corrected term ("AI") can't claim a field
+  // that a more specific one ("AI engineer") actually explains.
+  return (
+    fixes
+      .filter((fix) => {
+        const term = fix.corrected.toLowerCase();
+        return term.length > 1 && haystack.includes(term);
+      })
+      .sort((a, b) => b.corrected.length - a.corrected.length)[0] ?? null
+  );
+}
 
 /** The five the ticket stub prints: model order first, proficiency as tiebreak. */
 export function topSkills(profile: CareerProfile, count = 5): Skill[] {

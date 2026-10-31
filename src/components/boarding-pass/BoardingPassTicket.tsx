@@ -3,9 +3,11 @@
 import { motion } from "framer-motion";
 import {
   type CareerProfile,
+  fixFor,
   roleCode,
   ticketNumber,
   topSkills,
+  type TranscriptionFix,
 } from "@/lib/profile";
 import { LINE_COLOR } from "@/lib/stations";
 import { EditableField } from "./EditableField";
@@ -42,6 +44,7 @@ export function BoardingPassTicket({
   const { patchProfile, patchConstraints, patchSkill } = handlers;
   const skills = topSkills(profile);
   const hours = profile.constraints.hoursPerWeek;
+  const fixes = profile.transcriptionFixes ?? [];
 
   const num = (next: string | null) => {
     if (next === null) return null;
@@ -111,6 +114,7 @@ export function BoardingPassTicket({
                   code={roleCode(profile.currentRole)}
                   role={profile.currentRole}
                   placeholder="Current role"
+                  fix={fixFor(fixes, profile.currentRole)}
                   onSave={(next) => patchProfile({ currentRole: next })}
                 />
 
@@ -138,6 +142,7 @@ export function BoardingPassTicket({
                   role={profile.targetRole}
                   placeholder="Destination unknown"
                   align="right"
+                  fix={fixFor(fixes, profile.targetRole)}
                   onSave={(next) => patchProfile({ targetRole: next })}
                 />
               </div>
@@ -236,6 +241,9 @@ export function BoardingPassTicket({
                             </span>
                           ))}
                         </div>
+                        <HeardAs
+                          fix={fixFor(fixes, `${project.name} ${project.description}`)}
+                        />
                         <p className="t-small mt-1.5 max-w-[68ch] text-pretty text-ink-soft">
                           {project.description}
                         </p>
@@ -298,6 +306,7 @@ export function BoardingPassTicket({
                       name={skill.name}
                     />
                   </div>
+                  <HeardAs fix={fixFor(fixes, skill.name)} />
                   <EditableField
                     label={`Evidence for ${skill.name}`}
                     value={skill.evidence}
@@ -335,6 +344,20 @@ export function BoardingPassTicket({
   );
 }
 
+/**
+ * Printed under a term the extractor decided had been misheard, so a silent
+ * rewrite becomes a visible one. The field above it is editable, so this is
+ * also the cue to click and put the original back.
+ */
+function HeardAs({ fix }: { fix: TranscriptionFix | null }) {
+  if (!fix) return null;
+  return (
+    <span className="t-mono mt-1 block text-[10px] text-ink-faint">
+      HEARD AS “{fix.heardAs}”
+    </span>
+  );
+}
+
 /** Deterministic barcode widths. */
 const BARS = [3, 1, 2, 5, 1, 3, 1, 1, 4, 2, 1, 3, 5, 1, 2, 1, 3, 2, 1, 4, 1, 2, 3, 1, 5, 2, 1, 3];
 
@@ -354,6 +377,7 @@ function Endpoint({
   role,
   placeholder,
   onSave,
+  fix,
   align = "left",
 }: {
   slot: string;
@@ -361,6 +385,7 @@ function Endpoint({
   role: string | null;
   placeholder: string;
   onSave: (next: string | null) => void;
+  fix: TranscriptionFix | null;
   align?: "left" | "right";
 }) {
   const right = align === "right";
@@ -378,6 +403,7 @@ function Endpoint({
           onSave={onSave}
           className="t-body mt-2 text-ink"
         />
+        <HeardAs fix={fix} />
       </div>
     </div>
   );

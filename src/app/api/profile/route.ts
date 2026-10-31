@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getStructuredCompletion } from "@/lib/ai/structuredCompletion";
-import { type CareerProfile, PROFILE_SCHEMA } from "@/lib/profile";
+import {
+  type CareerProfile,
+  PROFILE_SCHEMA,
+  type TranscriptionFix,
+} from "@/lib/profile";
 
 /**
  * POST /api/profile
@@ -19,6 +23,10 @@ import { type CareerProfile, PROFILE_SCHEMA } from "@/lib/profile";
 const SYSTEM = `You extract a structured career profile from spoken career stories and résumé text for PivotLine, a career-pivot coach.
 
 The transcript is raw dictation. Expect filler words ("um", "like", "you know"), false starts, repetition, sentences that trail off, topics jumped between and returned to, and the speaker correcting themselves mid-thought ("I've been there three years — no, four"). Read the whole thing before deciding anything, and always honour the speaker's LAST statement about a fact over an earlier one.
+
+It is also speech-to-text output, so technical terms, tool names, libraries and company names are routinely mangled. Use the surrounding context to restore the term the speaker clearly meant, with its correct spelling and capitalisation — "rag pipeline" is "RAG pipeline", "langraph" or "lang graph" is "LangGraph", "post grass" is "PostgreSQL", "kuber netes" is "Kubernetes", "hugging face" is "Hugging Face", "pie torch" is "PyTorch", "a I engineer" is "AI engineer", "next JS" is "Next.js". Record each such rewrite in "transcriptionFixes" as {heardAs: exactly what the transcript said, corrected: what you wrote on the pass} — the ticket prints the correction under the term so the user can see it and undo it.
+
+Only correct where the context makes the intended term unambiguous. If you are not sure what was meant, keep the speaker's wording and record no fix. Do not record a fix for ordinary sentence capitalisation or pluralisation — only for a term whose written form a reader would not recognise from the transcript.
 
 Rules:
 - Never invent. Every field must be supported by something the speaker or the résumé actually said. If a fact was not stated, use null (or an empty array).
@@ -40,6 +48,7 @@ const MERGE_NOTE = `This speaker already has a profile, shown below as EXISTING 
 - New input that CORRECTS something ("actually it's four years", "I do know Docker"): the correction wins — overwrite the old value, and update that skill's proficiency and evidence.
 - A skill already present must not be duplicated. Update the existing entry instead, keeping whichever evidence is more concrete.
 - Re-order "skills" so the ones most relevant to the target role are still first.
+- Keep every entry already in "transcriptionFixes" (those terms are still printed on the pass) and append any new mistranscription you corrected in this input.
 - If the existing profile already has a target role, keep it unless the speaker explicitly changes it, and return followUpQuestion: null.`;
 
 type Body = {
@@ -96,6 +105,17 @@ export async function POST(request: Request) {
   }
 }
 
+/** Same correction from two takes is one note on the ticket. */
+function dedupeFixes(fixes: TranscriptionFix[]): TranscriptionFix[] {
+  const seen = new Set<string>();
+  return fixes.filter((fix) => {
+    const key = `${fix.heardAs.toLowerCase()}→${fix.corrected.toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /**
  * Guard rails the schema can't express. Mostly this protects a merge: a model
  * that returns a thin profile must not silently wipe facts the user already
@@ -111,6 +131,9 @@ function sanitize(profile: CareerProfile, existing: CareerProfile | null): Caree
     ...profile,
     skills,
     notableProjects: profile.notableProjects ?? [],
+    transcriptionFixes: (profile.transcriptionFixes ?? []).filter(
+      (fix) => fix.heardAs && fix.corrected && fix.heardAs !== fix.corrected,
+    ),
     constraints: {
       workMode: profile.constraints?.workMode ?? null,
       hoursPerWeek: profile.constraints?.hoursPerWeek ?? null,
@@ -134,6 +157,12 @@ function sanitize(profile: CareerProfile, existing: CareerProfile | null): Caree
     notableProjects: merged.notableProjects.length
       ? merged.notableProjects
       : existing.notableProjects,
+    // Fixes accumulate: a term corrected on the first take is still printed on
+    // the pass after a merge, so its "heard as" note has to survive too.
+    transcriptionFixes: dedupeFixes([
+      ...existing.transcriptionFixes,
+      ...merged.transcriptionFixes,
+    ]),
     constraints: {
       workMode: merged.constraints.workMode ?? existing.constraints.workMode,
       hoursPerWeek: merged.constraints.hoursPerWeek ?? existing.constraints.hoursPerWeek,
