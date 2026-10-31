@@ -16,12 +16,15 @@ export function SplitFlapRow({
   align = "left",
   defaultColor = "var(--color-amber-dim)",
   colorRanges = [],
+  size = 15,
 }: {
   value: string;
   length: number;
   align?: "left" | "right";
   defaultColor?: string;
   colorRanges?: ColorRange[];
+  /** Font-size in px for every cell in this row — lets one column run smaller. */
+  size?: number;
 }) {
   const upper = value.toUpperCase().slice(0, length);
   const padded = align === "right" ? upper.padStart(length, " ") : upper.padEnd(length, " ");
@@ -32,7 +35,7 @@ export function SplitFlapRow({
   return (
     <div className="flex gap-[2px]">
       {chars.map((ch, i) => (
-        <SplitFlapCell key={i} char={ch} color={colorAt(i)} />
+        <SplitFlapCell key={i} char={ch} color={colorAt(i)} size={size} />
       ))}
     </div>
   );

@@ -7,10 +7,19 @@ import { SplitFlapRow } from "./SplitFlapRow";
 const EASE = [0.16, 1, 0.3, 1] as const;
 
 const COLS = {
-  company: 14,
-  role: 18,
+  company: 13,
+  role: 27,
   status: 9,
   days: 4,
+};
+
+/** Role titles run long, so that column uses a smaller font to fit more
+ *  characters without the board getting any wider overall. */
+const SIZES = {
+  company: 15,
+  role: 12,
+  status: 15,
+  days: 15,
 };
 
 /**
@@ -34,11 +43,11 @@ export function DepartureBoard({ applications }: { applications: ApplicationReco
 
       <div className="overflow-x-auto px-5 py-4">
         <div className="inline-flex min-w-full flex-col gap-3">
-          <div className="flex gap-[2px]">
-            <SplitFlapRow value="COMPANY" length={COLS.company} />
-            <SplitFlapRow value="ROLE" length={COLS.role} />
-            <SplitFlapRow value="STATUS" length={COLS.status} />
-            <SplitFlapRow value="DAYS" length={COLS.days} align="right" />
+          <div className="flex items-center gap-[2px]">
+            <SplitFlapRow value="COMPANY" length={COLS.company} size={SIZES.company} />
+            <SplitFlapRow value="ROLE" length={COLS.role} size={SIZES.role} />
+            <SplitFlapRow value="STATUS" length={COLS.status} size={SIZES.status} />
+            <SplitFlapRow value="DAYS" length={COLS.days} align="right" size={SIZES.days} />
           </div>
 
           <AnimatePresence initial={false}>
@@ -50,16 +59,22 @@ export function DepartureBoard({ applications }: { applications: ApplicationReco
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.3, ease: EASE }}
-                className="flex gap-[2px]"
+                className="flex items-center gap-[2px]"
               >
-                <SplitFlapRow value={app.company} length={COLS.company} />
-                <SplitFlapRow value={app.role} length={COLS.role} />
+                <SplitFlapRow value={app.company} length={COLS.company} size={SIZES.company} />
+                <SplitFlapRow value={app.role} length={COLS.role} size={SIZES.role} />
                 <SplitFlapRow
                   value={app.status}
                   length={COLS.status}
                   defaultColor={STATUS_COLOR[app.status]}
+                  size={SIZES.status}
                 />
-                <SplitFlapRow value={`${daysSince(app.appliedAt)}D`} length={COLS.days} align="right" />
+                <SplitFlapRow
+                  value={`${daysSince(app.appliedAt)}D`}
+                  length={COLS.days}
+                  align="right"
+                  size={SIZES.days}
+                />
               </motion.div>
             ))}
           </AnimatePresence>
