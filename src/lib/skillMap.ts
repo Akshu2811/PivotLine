@@ -132,68 +132,56 @@ export const JD_EXTRACTION_SCHEMA: Record<string, unknown> = {
   additionalProperties: false,
 };
 
+/** One canonical skill: normalised across postings and judged against the profile. */
+const SKILL_ITEM_SCHEMA = {
+  type: "object",
+  properties: {
+    name: { type: "string" },
+    aliases: { type: "array", items: { type: "string" } },
+    status: { type: "string", enum: ["gap", "partial", "have"] },
+    reason: { type: "string" },
+    whyItMatters: { type: "string" },
+    dependsOn: { type: "array", items: { type: "string" } },
+    resources: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          kind: { type: "string" },
+          why: { type: "string" },
+        },
+        required: ["title", "kind", "why"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["name", "aliases", "status", "reason", "whyItMatters", "dependsOn", "resources"],
+  additionalProperties: false,
+};
+
 /**
- * Batch wrapper for stage one: every posting read in a single call instead
- * of one call per posting. "jobs" must come back in the same order the
- * postings were given, so the route can match each entry to its input index
- * without the model having to echo one back.
+ * Extraction and judgement in a single call: "jobs" is every posting's raw
+ * extraction (same shape `JD_EXTRACTION_SCHEMA` always used, needed to count
+ * how many postings asked for each skill), "skills" and "summary" are the
+ * normalised, judged map built from it. One call instead of two sequential
+ * ones — there's no round trip between reading the postings and judging
+ * them, which is most of what made the survey slow.
  */
-export const JD_EXTRACTION_BATCH_SCHEMA: Record<string, unknown> = {
+export const SKILL_MAP_RESULT_SCHEMA: Record<string, unknown> = {
   type: "object",
   properties: {
     jobs: {
       type: "array",
       items: JD_EXTRACTION_SCHEMA,
     },
-  },
-  required: ["jobs"],
-  additionalProperties: false,
-};
-
-/** Stage two: normalise across postings and rule on each skill. Judgement. */
-export const SKILL_COMPARISON_SCHEMA: Record<string, unknown> = {
-  type: "object",
-  properties: {
     skills: {
       type: "array",
-      items: {
-        type: "object",
-        properties: {
-          name: { type: "string" },
-          aliases: { type: "array", items: { type: "string" } },
-          status: { type: "string", enum: ["gap", "partial", "have"] },
-          reason: { type: "string" },
-          whyItMatters: { type: "string" },
-          dependsOn: { type: "array", items: { type: "string" } },
-          resources: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                title: { type: "string" },
-                kind: { type: "string" },
-                why: { type: "string" },
-              },
-              required: ["title", "kind", "why"],
-              additionalProperties: false,
-            },
-          },
-        },
-        required: [
-          "name",
-          "aliases",
-          "status",
-          "reason",
-          "whyItMatters",
-          "dependsOn",
-          "resources",
-        ],
-        additionalProperties: false,
-      },
+      items: SKILL_ITEM_SCHEMA,
     },
     summary: { type: "string" },
   },
-  required: ["skills", "summary"],
+  required: ["jobs", "skills", "summary"],
   additionalProperties: false,
 };
 

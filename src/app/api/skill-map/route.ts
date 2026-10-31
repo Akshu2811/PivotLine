@@ -3,12 +3,11 @@ import { getStructuredCompletion } from "@/lib/ai/structuredCompletion";
 import type { CareerProfile } from "@/lib/profile";
 import {
   type Importance,
-  JD_EXTRACTION_BATCH_SCHEMA,
   type JobExtraction,
   type MappedSkill,
   MAX_JDS,
   orderMainLine,
-  SKILL_COMPARISON_SCHEMA,
+  SKILL_MAP_RESULT_SCHEMA,
   type SkillMap,
   type SkillMention,
   type SkillStatus,
@@ -20,33 +19,33 @@ import {
  *
  * Body: { jobDescriptions: string[], profile: CareerProfile | null }
  *
- * Two stages, because they are two different jobs:
+ * One call, not two. This used to extract each posting's skills in its own
+ * stage and then normalise/judge them in a second stage — correct, but the
+ * round trip between the two was most of what made a 5-6 posting survey take
+ * over a minute. The model now does both in a single pass: read every
+ * posting, THEN normalise and judge, returned together. Reasoning effort is
+ * "low" rather than the "medium" a judgement task would normally get — pure
+ * speed trade for the live demo; quality of the normalisation/judging is the
+ * cost of that, and it's easy to move back to "medium" if it reads too thin.
  *
- *   1. Extract every posting's required / nice-to-have skills in a single
- *      call. Pure extraction, so low reasoning effort. This used to be one
- *      call per posting run concurrently; a single batched call is faster
- *      in practice (no per-call round-trip or concurrent-request queueing)
- *      and halves the number of model calls.
- *   2. Normalise the variations into canonical skills and rule each one gap /
- *      partial / have against the profile, with ordering and resources. That's
- *      judgement, so medium effort.
+ * Counting is not asked of the model at all. It returns the aliases that fold
+ * into each canonical skill; this route matches those aliases back to its own
+ * "jobs" extraction to derive how many postings asked for a skill and which
+ * phrase each used. The demand tags are therefore arithmetic over the real
+ * postings, not something the model asserted.
  *
- * Counting is not asked of the model at all. Stage two returns the aliases that
- * fold into each canonical skill; this route then matches those aliases back to
- * the stage-one extractions to derive how many postings asked for a skill and
- * which phrase each used. The demand tags are therefore arithmetic over the
- * real postings.
- *
- * The response is a stream of newline-delimited JSON events, so the screen can
- * announce real progress — each posting as it is actually read, then the
- * mapping stage — rather than animating a guess at how long this takes. A
- * heartbeat event keeps the stream from going idle during the long mapping
- * call, so nothing upstream mistakes the silence for a dead connection and
- * cuts it off before "done" ever arrives.
+ * The response is still a stream of newline-delimited JSON events, so the
+ * screen can announce progress rather than sit on one line for the whole
+ * call. A heartbeat event keeps the stream from going idle for the length of
+ * that one call, so nothing upstream mistakes the silence for a dead
+ * connection and cuts it off before "done" ever arrives.
  */
 
-/** Two model calls now instead of up to seven; the platform default would still cut it off. */
-export const maxDuration = 120;
+/** No AbortController or fetch timeout exists anywhere in this app — checked
+ *  the client fetch, every store, next.config.ts, and the OpenAI SDK's own
+ *  default (10 minutes). `maxDuration` is the only duration knob this route
+ *  has; set generously so a slow run still has room to finish. */
+export const maxDuration = 240;
 
 /** One line of NDJSON per event. The client renders these as announcements. */
 export type SurveyEvent =
@@ -57,44 +56,28 @@ export type SurveyEvent =
   | { type: "done"; map: SkillMap }
   | { type: "error"; error: string };
 
-const EXTRACT_SYSTEM = `You read several job postings and list the skills each one asks for, for a career-pivot tool.
+const SYSTEM = `You build a skill-gap map for someone pivoting careers, from several real job postings and their profile. Work in two phases, but return only the combined result the schema asks for.
 
-Return one entry per posting in "jobs", in the SAME ORDER the postings are given — the first entry is posting 1, and so on, even if a posting is thin or oddly formatted. Never skip, merge or reorder postings.
-
-For each posting:
+PHASE 1 — READ each posting and list what it asks for, returned in "jobs" in the SAME ORDER the postings are given — the first entry is posting 1, and so on, even if a posting is thin or oddly formatted. Never skip, merge or reorder postings.
 - "required": skills the posting treats as necessary — in the requirements section, or phrased as "you have", "must", "strong", "X+ years".
 - "niceToHave": skills phrased as bonus, plus, preferred, desirable, or "nice to have".
-- Each skill "name" is the concrete, searchable thing: a technology, tool, technique or discipline ("RAG pipelines", "Docker", "evaluation", "stakeholder communication"). Two to three words, no sentences. Use the posting's own term — a later step normalises variations across postings, so do not try to standardise here.
+- Each skill "name" is the concrete, searchable thing: a technology, tool, technique or discipline ("RAG pipelines", "Docker", "evaluation", "stakeholder communication"). Two to three words, no sentences. Use the posting's own term here — phase 2 normalises variations across postings, so do not try to standardise yet.
 - "phrase" is a SHORT VERBATIM QUOTE from the posting showing how it asked for that skill, at most 14 words. Never paraphrase, never invent a quote.
 - Skip generic filler that applies to any job ("team player", "fast-paced environment", "bachelor's degree") unless it names a real competency.
-- "title" is the role title and "company" the employer, or null if the posting does not say.`;
+- "title" is the role title and "company" the employer, or null if the posting does not say.
 
-const COMPARE_SYSTEM = `You build a skill-gap map for someone pivoting careers. You are given their profile and the skills extracted from several real job postings for their target role.
-
-Your job is to normalise and to judge. Do not count anything — counting is done elsewhere.
-
-NORMALISE
+PHASE 2 — NORMALISE every "required"/"niceToHave" name from phase 1 across every posting, and JUDGE each canonical skill against the profile, returned in "skills".
 - Fold variations into one canonical skill: "Python", "Python 3" and "production Python" are one skill; "RAG", "retrieval augmented generation" and "retrieval pipelines" are one skill; "pgvector", "Pinecone" and "vector store" are one skill ("Vector databases").
 - "name" is the canonical form, at most three words where possible, as it will be printed on a metro station label.
-- "aliases" MUST list every raw extracted name from the input that folds into this skill, copied EXACTLY as given. This is how the postings are matched back to the skill, so a missing alias silently loses a posting. Every raw name in the input belongs to exactly one canonical skill.
+- "aliases" MUST list every raw name from phase 1 that folds into this skill, copied EXACTLY as you wrote it there. This is how postings get matched back to the skill, so a missing alias silently loses a posting. Every raw name belongs to exactly one canonical skill.
 - Merge aggressively enough that the map is readable — aim for 8 to 14 canonical skills total — but never merge two genuinely different asks (retrieval is not evaluation; Docker is not Kubernetes).
-
-JUDGE each canonical skill against the profile:
-- "have": the profile shows they can already do this at the level the postings ask for.
-- "partial": real but insufficient exposure — they script it but haven't shipped it, or did it once on a side project, or have an adjacent skill that transfers most of the way.
-- "gap": nothing in the profile supports it.
+- "have": the profile shows they can already do this at the level the postings ask for. "partial": real but insufficient exposure — they script it but haven't shipped it, or did it once on a side project, or have an adjacent skill that transfers most of the way. "gap": nothing in the profile supports it.
 - "reason" is one line, addressed to the user as "you", citing what in their profile drove the call ("You script confidently but have never shipped a Python service"). Never invent experience they didn't describe.
 - "whyItMatters" is two or three sentences on why this role needs it, and where their background gives them an advantage or a shortcut. Concrete, not motivational.
-
-ORDER
 - "dependsOn" lists the canonical NAMES of skills that are genuinely prerequisite — you cannot build retrieval without the language it is written in. Only real dependencies; most skills have none. Never create a cycle.
+- "resources": exactly 2 or 3 per skill with status gap or partial, an EMPTY array for status have. Prefer first-party documentation, one well-known course or guide, and one concrete project that uses something from the user's own background. "kind" is one word: Docs, Course, Guide, Paper, Project. "why" is one line. Only name resources you are confident exist — a described project ("Port your alert bot to a typed service") is always safe, a specific course title you are unsure of is not.
 
-RESOURCES
-- Exactly 2 or 3 per skill with status gap or partial, and an EMPTY array for status have.
-- Prefer first-party documentation, one well-known course or guide, and one concrete project that uses something from the user's own background. "kind" is one word: Docs, Course, Guide, Paper, Project. "why" is one line on why this resource specifically.
-- Only name resources you are confident exist. A described project ("Port your alert bot to a typed service") is always safe; a specific course title you are unsure of is not.
-
-"summary" is two sentences on what the postings agree about and where this person stands.`;
+"summary" is two sentences on what the postings agree about and where this person stands. Do not count postings or mentions anywhere — that arithmetic happens outside this call.`;
 
 type Body = {
   jobDescriptions?: string[];
@@ -142,26 +125,33 @@ export async function POST(request: Request) {
       const send = (event: SurveyEvent) =>
         controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
 
-      // Keeps bytes flowing during the long single mapping call so an idle
+      // Keeps bytes flowing for the length of the one call so an idle
       // connection is never mistaken for a dead one and cut before "done".
       const heartbeat = setInterval(() => send({ type: "heartbeat" }), 10_000);
 
       try {
         send({ type: "start", total: jds.length });
+        send({ type: "mapping", total: jds.length });
 
-        // Stage one: every posting in one call. Announce each as it's
-        // reported back, in order, so the board still fills one row at a
-        // time even though the read itself wasn't incremental.
-        const batch = await getStructuredCompletion<{ jobs: JobExtraction[] }>({
-          system: EXTRACT_SYSTEM,
-          prompt: jds.map((jd, index) => `JOB POSTING ${index + 1}:\n"""\n${jd}\n"""`).join("\n\n"),
-          schema: JD_EXTRACTION_BATCH_SCHEMA,
-          schemaName: "job_description_skills_batch",
+        const result = await getStructuredCompletion<{
+          jobs: JobExtraction[];
+          skills: ComparisonSkill[];
+          summary: string;
+        }>({
+          system: SYSTEM,
+          prompt: buildPrompt(jds, profile),
+          schema: SKILL_MAP_RESULT_SCHEMA,
+          schemaName: "skill_gap_map",
         });
 
         const extractions: JobExtraction[] = jds.map(
           (_, index) =>
-            batch.data.jobs[index] ?? { title: "Untitled posting", company: null, required: [], niceToHave: [] },
+            result.data.jobs[index] ?? {
+              title: "Untitled posting",
+              company: null,
+              required: [],
+              niceToHave: [],
+            },
         );
         extractions.forEach((extraction, index) => {
           send({
@@ -173,20 +163,7 @@ export async function POST(request: Request) {
           });
         });
 
-        // Stage two: normalise and judge, once, over everything.
-        send({ type: "mapping", total: jds.length });
-        const comparison = await getStructuredCompletion<{
-          skills: ComparisonSkill[];
-          summary: string;
-        }>({
-          system: COMPARE_SYSTEM,
-          prompt: buildComparisonPrompt(extractions, profile),
-          schema: SKILL_COMPARISON_SCHEMA,
-          schemaName: "skill_gap_comparison",
-          reasoningEffort: "medium",
-        });
-
-        send({ type: "done", map: assemble(extractions, comparison.data, profile) });
+        send({ type: "done", map: assemble(extractions, result.data, profile) });
       } catch (error) {
         // The status line is already 200 by the time anything can fail, so a
         // failure is an event rather than a status code.
@@ -210,16 +187,9 @@ export async function POST(request: Request) {
   });
 }
 
-function buildComparisonPrompt(
-  extractions: JobExtraction[],
-  profile: CareerProfile | null,
-): string {
-  const postings = extractions
-    .map((jd, i) => {
-      const required = jd.required.map((s) => `    - ${s.name}`).join("\n") || "    (none)";
-      const nice = jd.niceToHave.map((s) => `    - ${s.name}`).join("\n") || "    (none)";
-      return `POSTING ${i + 1} — ${jd.title}${jd.company ? ` at ${jd.company}` : ""}\n  Required:\n${required}\n  Nice to have:\n${nice}`;
-    })
+function buildPrompt(jds: string[], profile: CareerProfile | null): string {
+  const postings = jds
+    .map((jd, i) => `JOB POSTING ${i + 1}:\n"""\n${jd}\n"""`)
     .join("\n\n");
 
   const who = profile
@@ -234,7 +204,7 @@ function buildComparisonPrompt(
       ].join("\n")
     : "No profile on file. Treat every skill as a gap, and say so in each reason.";
 
-  return `THEIR PROFILE:\n${who}\n\nSKILLS EXTRACTED FROM ${extractions.length} REAL POSTINGS (raw names, not yet normalised):\n\n${postings}`;
+  return `THEIR PROFILE:\n${who}\n\n${jds.length} REAL JOB POSTINGS:\n\n${postings}`;
 }
 
 /**

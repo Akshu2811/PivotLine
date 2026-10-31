@@ -137,10 +137,12 @@ export default function LinePage() {
               `Posting ${event.done} of ${event.total} read — ${who}`,
               `${String(event.done).padStart(2, "0")}/${String(event.total).padStart(2, "0")}`,
             );
-            setProgress({ done: event.done, total: event.total, phase: "extracting" });
+            // Extraction and mapping happen in one call now, so this just
+            // updates the count — it doesn't mean reading finished early.
+            setProgress((p) => ({ ...p, done: event.done, total: event.total }));
           } else if (event.type === "mapping") {
-            announce("Mapping the line — folding variations into stations", "MAP");
-            setProgress((p) => ({ ...p, phase: "mapping" }));
+            announce("Reading the postings and mapping the line in one pass", "MAP");
+            setProgress({ done: 0, total: event.total, phase: "mapping" });
           } else if (event.type === "error") {
             throw new Error(event.error);
           } else if (event.type === "done") {
