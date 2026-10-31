@@ -30,6 +30,8 @@ function getClient(): OpenAI {
 
 export const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-5-mini";
 
+export type ReasoningEffort = "minimal" | "low" | "medium" | "high";
+
 export interface StructuredCompletionOptions {
   /** System / instructions prompt describing the task and constraints. */
   system: string;
@@ -41,8 +43,14 @@ export interface StructuredCompletionOptions {
   schemaName: string;
   /** Override the default model. */
   model?: string;
-  /** Sampling temperature. Defaults to 0.3 for consistent, structured results. */
+  /** Sampling temperature. Only sent if explicitly set — reasoning-tier models reject it. */
   temperature?: number;
+  /**
+   * Reasoning effort for the model. Defaults to "low".
+   * Use "low" for extraction tasks (profile parsing, JD skill extraction, application
+   * record parsing). Use "medium" for planning/re-planning, insights, and interview scoring.
+   */
+  reasoningEffort?: ReasoningEffort;
 }
 
 export interface StructuredCompletionResult<T> {
@@ -59,14 +67,18 @@ export interface StructuredCompletionResult<T> {
 export async function getStructuredCompletion<T = unknown>(
   options: StructuredCompletionOptions
 ): Promise<StructuredCompletionResult<T>> {
-  const { system, prompt, schema, schemaName, model, temperature } = options;
+  const { system, prompt, schema, schemaName, model, temperature, reasoningEffort } = options;
   const openai = getClient();
   const resolvedModel = model || DEFAULT_MODEL;
+  const resolvedEffort = reasoningEffort ?? "low";
 
   const attempt = async (extraInstruction?: string): Promise<string> => {
     const response = await openai.responses.create({
       model: resolvedModel,
-      temperature: temperature ?? 0.3,
+      reasoning: { effort: resolvedEffort },
+      // Reasoning-tier models (e.g. gpt-5-mini) reject `temperature` entirely,
+      // so only send it when a caller explicitly opts in.
+      ...(temperature !== undefined ? { temperature } : {}),
       instructions: extraInstruction ? `${system}\n\n${extraInstruction}` : system,
       input: prompt,
       text: {
