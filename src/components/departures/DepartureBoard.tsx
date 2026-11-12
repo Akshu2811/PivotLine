@@ -6,7 +6,7 @@ import { DepartureRow } from "./DepartureRow";
 import { SplitFlapRow } from "./SplitFlapRow";
 
 const COLS = {
-  company: 13,
+  company: 18,
   role: 27,
   status: 9,
   days: 4,
@@ -15,7 +15,7 @@ const COLS = {
 /** Role titles run long, so that column uses a smaller font to fit more
  *  characters without the board getting any wider overall. */
 const SIZES = {
-  company: 15,
+  company: 13,
   role: 12,
   status: 15,
   days: 15,
