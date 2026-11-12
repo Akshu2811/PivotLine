@@ -227,7 +227,7 @@ export default function DeparturesPage() {
         <div className="mt-6">
           <EmptyState
             line={STATION.line}
-            heading="No departures on the board."
+            heading="That's sample data. Your own board starts with your first application."
             sayThis={[
               "I applied to Monzo for an AI engineer role on Tuesday.",
               "The Stripe one came back — technical screen on LangGraph booked for Thursday.",

@@ -47,7 +47,7 @@ export function ResponseRateChart({ stats }: { stats: TagStat[] }) {
                   transition={{ duration: 0.6, ease: EASE }}
                 />
               </span>
-              <span className="t-mono w-[76px] shrink-0 text-right text-[11px] text-amber-dim">
+              <span className="t-mono w-[100px] shrink-0 text-right whitespace-nowrap text-[11px] text-amber-dim">
                 {stat.responded}/{stat.total} · {Math.round(stat.rate * 100)}%
               </span>
             </li>

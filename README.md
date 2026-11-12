@@ -102,7 +102,7 @@ flowchart LR
     R --> C[Code-side checks:<br/>counts, clamps, ID and<br/>station validation]
   end
   C -- JSON / NDJSON stream --> S
-  X[Dictation tool<br/>e.g. Wispr Flow] -.types into.-> D
+  X[Dictation tool<br/>e.g. Wispr Flow] -.dictates.-> D
 ```
 
 ## Built by voice
